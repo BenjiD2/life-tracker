@@ -143,3 +143,43 @@ describe('errors', () => {
     expect(typeof r.body.error).toBe('string');
   });
 });
+
+describe('tracker order', () => {
+  type T = { id: number; position: number };
+  const ids = (ts: T[]) => ts.map((t) => t.id);
+
+  it('a new tracker goes after every existing one', async () => {
+    const { req } = setup();
+    const before: T[] = (await req('GET', '/api/trackers')).body;
+    const t = (await req('POST', '/api/trackers', { areaId: 2, name: 'Meditate', kind: 'check' })).body;
+    expect(t.position).toBeGreaterThan(Math.max(...before.map((b) => b.position)));
+  });
+
+  it('PUT /order saves the order, which GET follows', async () => {
+    const { req } = setup();
+    const reversed = ids((await req('GET', '/api/trackers')).body).reverse();
+    const put = await req('PUT', '/api/trackers/order', { ids: reversed });
+    expect(put.status).toBe(200);
+    expect(ids(put.body)).toEqual(reversed);
+    const got: T[] = (await req('GET', '/api/trackers')).body;
+    expect(ids(got)).toEqual(reversed);
+    expect(got.map((t) => t.position)).toEqual(reversed.map((_, i) => i));
+  });
+
+  it('PUT /order must list every tracker exactly once (400, order unchanged)', async () => {
+    const { req } = setup();
+    const order = ids((await req('GET', '/api/trackers')).body);
+    for (const bad of [order.slice(1), [...order, 999], [...order.slice(1), order[1]]]) {
+      const r = await req('PUT', '/api/trackers/order', { ids: bad });
+      expect(r.status).toBe(400);
+      expect(typeof r.body.error).toBe('string');
+    }
+    expect(ids((await req('GET', '/api/trackers')).body)).toEqual(order);
+  });
+
+  it('position is not accepted by POST or PATCH (400)', async () => {
+    const { req, trackerId } = setup();
+    expect((await req('POST', '/api/trackers', { areaId: 2, name: 'x', kind: 'check', position: 5 })).status).toBe(400);
+    expect((await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { position: 5 })).status).toBe(400);
+  });
+});

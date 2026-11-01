@@ -18,6 +18,8 @@ export const trackers = sqliteTable('trackers', {
   subject: text('subject'),
   /** Quantity trackers only: minutes one unit is worth, for estimated time. */
   minutesPerUnit: real('minutes_per_unit'),
+  /** Saved order: ascending, ties by id. Set by the server on create and by PUT /api/trackers/order. */
+  position: integer('position').notNull().default(0),
 });
 
 export const entries = sqliteTable(

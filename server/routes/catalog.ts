@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq, max } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { areaInput, areaPatch, trackerInput, trackerPatch } from '../../shared/schemas';
+import { areaInput, areaPatch, trackerInput, trackerOrder, trackerPatch } from '../../shared/schemas';
 import type { Db } from '../db/client';
 import { areas, goals, trackers } from '../db/schema';
 import { fail, paramId, validate } from './http';
@@ -9,6 +9,7 @@ const NOT_QUANTITY = 'Minutes per unit only applies to quantity trackers';
 
 export function catalogRoutes(db: Db) {
   const findArea = (id: number | null) => (id === null ? undefined : db.select().from(areas).where(eq(areas.id, id)).get());
+  const trackersInOrder = () => db.select().from(trackers).orderBy(asc(trackers.position), asc(trackers.id)).all();
 
   return new Hono()
     .get('/areas', (c) => c.json(db.select().from(areas).all()))
@@ -38,17 +39,31 @@ export function catalogRoutes(db: Db) {
       return c.body(null, 204);
     })
 
-    .get('/trackers', (c) => c.json(db.select().from(trackers).all()))
+    .get('/trackers', (c) => c.json(trackersInOrder()))
     .post('/trackers', validate('json', trackerInput), (c) => {
       const input = c.req.valid('json');
       if (!findArea(input.areaId)) return fail(c, 404, 'Area not found');
       if (input.minutesPerUnit != null && input.kind !== 'quantity') return fail(c, 400, NOT_QUANTITY);
+      const last = db.select({ position: max(trackers.position) }).from(trackers).get()?.position;
       const row = db
         .insert(trackers)
-        .values({ ...input, unit: input.unit ?? null, subject: input.subject ?? null, minutesPerUnit: input.minutesPerUnit ?? null })
+        .values({
+          ...input, unit: input.unit ?? null, subject: input.subject ?? null, minutesPerUnit: input.minutesPerUnit ?? null,
+          position: last == null ? 0 : last + 1,
+        })
         .returning()
         .get();
       return c.json(row, 201);
+    })
+    .put('/trackers/order', validate('json', trackerOrder), (c) => {
+      const { ids } = c.req.valid('json');
+      const existing = new Set(db.select({ id: trackers.id }).from(trackers).all().map((t) => t.id));
+      if (ids.length !== existing.size || new Set(ids).size !== ids.length || !ids.every((id) => existing.has(id)))
+        return fail(c, 400, 'Order must list every tracker exactly once');
+      db.transaction((tx) => {
+        ids.forEach((id, position) => tx.update(trackers).set({ position }).where(eq(trackers.id, id)).run());
+      });
+      return c.json(trackersInOrder());
     })
     .patch('/trackers/:id', validate('json', trackerPatch), (c) => {
       const id = paramId(c);

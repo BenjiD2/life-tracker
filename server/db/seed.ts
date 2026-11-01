@@ -28,9 +28,10 @@ const SEED: { name: string; color: string; trackers: { name: string; kind: 'quan
 export function seedIfEmpty(db: Db): void {
   db.transaction((tx) => {
     if (tx.select({ id: areas.id }).from(areas).limit(1).all().length > 0) return;
+    let position = 0;
     for (const a of SEED) {
       const { id } = tx.insert(areas).values({ name: a.name, color: a.color }).returning({ id: areas.id }).get();
-      for (const t of a.trackers) tx.insert(trackers).values({ areaId: id, ...t }).run();
+      for (const t of a.trackers) tx.insert(trackers).values({ areaId: id, ...t, position: position++ }).run();
     }
   });
 }

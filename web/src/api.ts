@@ -31,6 +31,7 @@ export const deleteArea = (id: number) => body(api.areas[':id'].$delete({ param:
 export const getTrackers = () => body(api.trackers.$get());
 export const createTracker = (json: TrackerInput) => body(api.trackers.$post({ json }));
 export const updateTracker = (id: number, json: TrackerPatch) => body(api.trackers[':id'].$patch({ param: param(id), json }));
+export const reorderTrackers = (ids: number[]) => body(api.trackers.order.$put({ json: { ids } }));
 
 export const getEntries = (date: DateStr) => body(api.entries.$get({ query: { date } }));
 export const putEntry = (json: EntryInput) => body(api.entries.$put({ json }));

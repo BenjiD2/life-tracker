@@ -22,12 +22,14 @@ export const trackerInput = z.object({
   unit: z.string().trim().min(1).nullish(),
   subject: subject.optional(),
   minutesPerUnit: minutesPerUnit.optional(),
-});
+}).strict(); // so `position` (set by the server) is refused rather than ignored
 // .strict(): `kind` is immutable after creation, so sending it is an error rather than silently ignored.
 export const trackerPatch = z
   .object({ name, unit: z.string().trim().min(1).nullable(), archived: z.boolean(), areaId: id, subject, minutesPerUnit })
   .partial()
   .strict();
+/** Every tracker id, archived included, in the new order. */
+export const trackerOrder = z.object({ ids: z.array(id) });
 
 export const entryInput = z.object({
   trackerId: id,
@@ -45,6 +47,7 @@ export type AreaInput = z.infer<typeof areaInput>;
 export type AreaPatch = z.infer<typeof areaPatch>;
 export type TrackerInput = z.infer<typeof trackerInput>;
 export type TrackerPatch = z.infer<typeof trackerPatch>;
+export type TrackerOrder = z.infer<typeof trackerOrder>;
 export type EntryInput = z.infer<typeof entryInput>;
 
 const pages = z.number().int().positive('must be at least 1');
