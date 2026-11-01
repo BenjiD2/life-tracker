@@ -52,7 +52,9 @@ export const createGoalItem = (goalId: number, input: GoalItemInput) => call<Goa
 export const updateGoalItem = (id: number, patch: GoalItemPatch) => call<GoalItem>('PATCH', `/goal-items/${id}`, patch);
 export const deleteGoalItem = (id: number) => call<void>('DELETE', `/goal-items/${id}`);
 
-export const getDashboard = () => call<DashboardData>('GET', '/dashboard');
+/** Without a range the server uses its default (the last 12 weeks). */
+export const getDashboard = (range?: { from: DateStr; to: DateStr }) =>
+  call<DashboardData>('GET', range ? `/dashboard?${q(range)}` : '/dashboard');
 
 export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 

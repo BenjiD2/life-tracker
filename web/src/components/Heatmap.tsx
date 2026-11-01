@@ -1,4 +1,4 @@
-import { addDays, periodBounds } from '../../../shared/dates';
+import { addDays, daysBetween, periodBounds } from '../../../shared/dates';
 import type { DateStr } from '../../../shared/types';
 import { formatDay } from '../format';
 
@@ -13,9 +13,10 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * Calendar of active days: one column per week (Monday on top), ending with the week of `end`.
  * Binary encoding: the area's color for an active day, the empty-cell token otherwise.
  */
-export function Heatmap({ dates, end, weeks = 52, color }: { dates: DateStr[]; end: DateStr; weeks?: number; color: string }) {
+export function Heatmap({ dates, start, end, color }: { dates: DateStr[]; start: DateStr; end: DateStr; color: string }) {
   const active = new Set(dates);
-  const firstMonday = addDays(periodBounds(end, 'week').start, -7 * (weeks - 1));
+  const firstMonday = periodBounds(start, 'week').start;
+  const weeks = daysBetween(firstMonday, periodBounds(end, 'week').start) / 7 + 1;
   const cells: { d: DateStr; col: number; row: number }[] = [];
   const monthLabels: { col: number; label: string }[] = [];
 
@@ -24,6 +25,7 @@ export function Heatmap({ dates, end, weeks = 52, color }: { dates: DateStr[]; e
     for (let row = 0; row < 7; row++) {
       const d = addDays(monday, row);
       if (d > end) break;
+      if (d < start) continue;
       cells.push({ d, col, row });
       // Label a column when its week contains the 1st of a month.
       if (d.endsWith('-01')) monthLabels.push({ col, label: MONTHS[Number(d.slice(5, 7)) - 1] });
@@ -35,7 +37,7 @@ export function Heatmap({ dates, end, weeks = 52, color }: { dates: DateStr[]; e
   return (
     <div className="heatmap-wrap">
       <svg className="heatmap" width={width} height={height} role="img"
-        aria-label={`${dates.length} active days in the last ${weeks} weeks`}>
+        aria-label={`${dates.length} active days from ${formatDay(start)} to ${formatDay(end)}`}>
         {monthLabels.map((m) => <text key={`${m.col}${m.label}`} x={LEFT + m.col * STEP} y={9}>{m.label}</text>)}
         {['Mon', 'Wed', 'Fri'].map((label, i) => <text key={label} x={0} y={TOP + i * 2 * STEP + 9}>{label[0]}</text>)}
         {cells.map(({ d, col, row }) => (

@@ -14,7 +14,7 @@ export interface Series {
  * A legend appears only with two or more series (a single series is named by the chart title).
  */
 export function TrendChart({
-  data, series, kind, height = 180, xFormat, yDomain, yTicks, unit,
+  data, series, kind, height = 180, xFormat, yDomain, yTicks, unit, dots = true,
 }: {
   data: Record<string, string | number>[];
   series: Series[];
@@ -24,6 +24,8 @@ export function TrendChart({
   yDomain?: [number, number];
   yTicks?: number[];
   unit?: string;
+  /** Line charts: draw a dot per point. Off for dense ranges, where dots pile into clutter. */
+  dots?: boolean;
 }) {
   const axis = { stroke: 'var(--axis)', tick: { fill: 'var(--ink-muted)', fontSize: 11 }, tickLine: false };
   const common = (
@@ -71,7 +73,7 @@ export function TrendChart({
           {common}
           {series.map((s) => (
             <Line key={s.key} dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2}
-              dot={{ r: 4, fill: s.color, stroke: 'var(--surface)', strokeWidth: 2 }} activeDot={{ r: 5 }}
+              dot={dots && { r: 4, fill: s.color, stroke: 'var(--surface)', strokeWidth: 2 }} activeDot={{ r: 5 }}
               connectNulls isAnimationActive={false} />
           ))}
         </LineChart>

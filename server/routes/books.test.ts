@@ -69,7 +69,7 @@ describe('starting page (progress from before tracking)', () => {
     expect((await req('GET', '/api/books')).body[0].currentPage).toBe(200);
     await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-14', pageReached: 230 });
     const d = (await req('GET', '/api/dashboard')).body;
-    expect(d.pagesPerWeek.at(-1)).toEqual({ weekStart: '2026-10-12', pages: 30 });
+    expect(d.pagesRead.at(-1)).toEqual({ periodStart: '2026-10-12', pages: 30 });
   });
 
   it('startPage defaults to 0', async () => {

@@ -31,6 +31,10 @@ export const entryInput = z.object({
 });
 export const entryKey = z.object({ trackerId: z.coerce.number().int().positive(), date: dateStr });
 export const dateQuery = z.object({ date: dateStr });
+export const rangeQuery = z
+  .object({ from: dateStr.optional(), to: dateStr.optional() })
+  .refine((q) => (q.from === undefined) === (q.to === undefined), 'from and to go together')
+  .refine((q) => q.from === undefined || q.to === undefined || q.from <= q.to, 'from must be on or before to');
 
 export type AreaInput = z.infer<typeof areaInput>;
 export type AreaPatch = z.infer<typeof areaPatch>;

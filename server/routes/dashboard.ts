@@ -1,62 +1,67 @@
 import { Hono } from 'hono';
 import { addDays, periodBounds } from '../../shared/dates';
+import { rangeQuery } from '../../shared/schemas';
 import type { DashboardData, DateStr } from '../../shared/types';
 import type { Db } from '../db/client';
 import { areas, books, entries, readingLog, trackers } from '../db/schema';
+import { bucketFor, bucketStarts } from '../stats/buckets';
 import { pagesReadByDate, readingDates } from '../stats/reading';
-import { isBooksArea } from './books-area';
 import { activeDates } from '../stats/streaks';
+import { isBooksArea } from './books-area';
 import { goalsWithProgress } from './goals';
+import { validate } from './http';
 
-const WEEKS = 12;
+const DEFAULT_WEEKS = 12;
 
 export function dashboardRoutes(db: Db, today: () => DateStr) {
-  return new Hono().get('/dashboard', (c) => {
+  return new Hono().get('/dashboard', validate('query', rangeQuery), (c) => {
     const now = today();
+    const q = c.req.valid('query');
+    // Default: the last 12 weeks, including the current one.
+    const to = q.to ?? now;
+    const from = q.from ?? addDays(periodBounds(now, 'week').start, -7 * (DEFAULT_WEEKS - 1));
+    const inRange = (d: DateStr) => d >= from && d <= to;
+    const bucket = bucketFor(from, to);
+    const starts = bucketStarts(from, to, bucket);
+    const bucketOf = (d: DateStr) => periodBounds(d, bucket).start;
+
     const allTrackers = db.select().from(trackers).all();
     const allEntries = db.select().from(entries).all();
-    const yearAgo = addDays(now, -364);
-    const moodFrom = addDays(now, -89);
-    const thisWeek = periodBounds(now, 'week').start;
-    const weekStarts = Array.from({ length: WEEKS }, (_, i) => addDays(thisWeek, -7 * (WEEKS - 1 - i)));
-    // Every date maps to the Monday of its week; only the 12 tracked weeks are kept.
-    const weekOf = (d: DateStr) => periodBounds(d, 'week').start;
-
     const logs = db.select().from(readingLog).all();
     const startPages = new Map(db.select().from(books).all().map((b) => [b.id, b.startPage]));
+    // Deltas need each book's full history, so diff everything, then keep the range.
+    const pagesByDate = pagesReadByDate(logs, startPages);
+
     const areaRows = db.select().from(areas).all().map((area) => {
       const ids = new Set(allTrackers.filter((t) => t.areaId === area.id).map((t) => t.id));
       const active = activeDates(allEntries, ids);
       if (isBooksArea(area)) for (const d of readingDates(logs, startPages)) active.add(d);
-      const dates = [...active].filter((d) => d >= yearAgo && d <= now).sort();
-      return { area, activeDates: dates };
+      return { area, activeDates: [...active].filter(inRange).sort() };
     });
 
-    const totals = new Map<string, number>(); // `${trackerId}|${weekStart}`
+    const totals = new Map<string, number>(); // `${trackerId}|${periodStart}`
     for (const e of allEntries) {
-      if (e.date < weekStarts[0] || e.date > now) continue;
-      const key = `${e.trackerId}|${weekOf(e.date)}`;
+      if (!inRange(e.date)) continue;
+      const key = `${e.trackerId}|${bucketOf(e.date)}`;
       totals.set(key, (totals.get(key) ?? 0) + e.value);
     }
-    const weeklyTotals = allTrackers
+    const trackerTotals = allTrackers
       .filter((t) => t.kind === 'quantity')
-      .flatMap((t) => weekStarts.map((weekStart) => ({ trackerId: t.id, weekStart, total: totals.get(`${t.id}|${weekStart}`) ?? 0 })));
+      .flatMap((t) => starts.map((periodStart) => ({ trackerId: t.id, periodStart, total: totals.get(`${t.id}|${periodStart}`) ?? 0 })));
 
     const ratingIds = new Set(allTrackers.filter((t) => t.kind === 'rating').map((t) => t.id));
     const mood = allEntries
-      .filter((e) => ratingIds.has(e.trackerId) && e.date >= moodFrom && e.date <= now)
+      .filter((e) => ratingIds.has(e.trackerId) && inRange(e.date))
       .map((e) => ({ trackerId: e.trackerId, date: e.date, value: e.value }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Deltas need each book's full history, so diff everything, then bucket.
     const pages = new Map<DateStr, number>();
-    for (const [date, n] of pagesReadByDate(logs, startPages)) {
-      if (date < weekStarts[0] || date > now) continue;
-      pages.set(weekOf(date), (pages.get(weekOf(date)) ?? 0) + n);
-    }
-    const pagesPerWeek = weekStarts.map((weekStart) => ({ weekStart, pages: pages.get(weekStart) ?? 0 }));
+    for (const [date, n] of pagesByDate) if (inRange(date)) pages.set(bucketOf(date), (pages.get(bucketOf(date)) ?? 0) + n);
+    const pagesRead = starts.map((periodStart) => ({ periodStart, pages: pages.get(periodStart) ?? 0 }));
 
-    const out: DashboardData = { today: now, areas: areaRows, goals: goalsWithProgress(db, now), weeklyTotals, mood, pagesPerWeek };
+    const out: DashboardData = {
+      today: now, from, to, bucket, areas: areaRows, goals: goalsWithProgress(db, now), trackerTotals, mood, pagesRead,
+    };
     return c.json(out);
   });
 }

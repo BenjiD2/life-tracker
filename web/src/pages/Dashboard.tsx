@@ -1,33 +1,67 @@
 import { useEffect, useState } from 'react';
-import { addDays } from '../../../shared/dates';
-import type { Area, DashboardData, GoalWithProgress, Tracker } from '../../../shared/types';
+import { useSearchParams } from 'react-router-dom';
+import { addDays, daysBetween, isDateStr, todayLocal } from '../../../shared/dates';
+import type { Area, DashboardData, DateStr, GoalWithProgress, Tracker } from '../../../shared/types';
 import * as api from '../api';
 import { Heatmap } from '../components/Heatmap';
 import { PaceBar } from '../components/PaceBar';
 import { ProgressRing } from '../components/ProgressRing';
 import { TrendChart, type Series } from '../components/TrendChart';
-import { formatShort } from '../format';
+import { RangeFilter, presetRange, PRESETS, type RangeKey } from '../components/RangeFilter';
+import { formatDay, formatMonth, formatShort } from '../format';
 
 // Categorical slots in fixed order (dataviz reference palette); a series keeps its slot by tracker order, never by rank.
 const SLOTS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
 
+/** The selected range lives in the URL (?range=6m, or ?range=custom&from=…&to=…) so a reload keeps it. */
+function useRange() {
+  const [params, setParams] = useSearchParams();
+  const today = todayLocal();
+  const key = (params.get('range') ?? '12w') as RangeKey;
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  const custom = key === 'custom' && isDateStr(from) && isDateStr(to) && from <= to;
+  const preset = PRESETS.some((p) => p.key === key) ? (key as Exclude<RangeKey, 'custom'>) : '12w';
+  const range = custom ? { from, to } : presetRange(preset, today);
+  return {
+    today,
+    key: custom ? 'custom' : preset,
+    range,
+    setPreset: (k: Exclude<RangeKey, 'custom'>) => setParams({ range: k }),
+    setCustom: (f: DateStr, t: DateStr) => setParams({ range: 'custom', from: f, to: t }),
+  } as const;
+}
+
 export function Dashboard() {
+  const { today, key, range, setPreset, setCustom } = useRange();
   const [data, setData] = useState<DashboardData | null>(null);
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => { api.getTrackers().then(setTrackers).catch(() => {}); }, []);
   useEffect(() => {
-    Promise.all([api.getDashboard(), api.getTrackers()])
-      .then(([d, t]) => { setData(d); setTrackers(t); })
-      .catch((e) => setError(api.errorMessage(e)));
-  }, []);
+    let live = true;
+    api.getDashboard(range)
+      .then((d) => { if (live) { setData(d); setError(null); } })
+      .catch((e) => live && setError(api.errorMessage(e)));
+    return () => { live = false; };
+  }, [range.from, range.to]);
 
-  if (error) return <div className="banner-error">{error}</div>;
-  if (!data) return <p className="muted">Loading…</p>;
+  const filter = (
+    <RangeFilter range={key} from={range.from} to={range.to} today={today} onPreset={setPreset} onCustom={setCustom} />
+  );
+  if (error) return <>{filter}<div className="banner-error">{error}</div></>;
+  if (!data) return <>{filter}<p className="muted">Loading…</p></>;
 
   const hasReadingArea = data.areas.some((a) => a.area.name.toLowerCase() === 'reading');
   return (
     <div className="dash-grid">
+      <div>
+        {filter}
+        <p className="range-note">
+          {formatDay(data.from)} – {formatDay(data.to)} · {data.bucket === 'week' ? 'weekly' : 'monthly'} totals · goals show current progress
+        </p>
+      </div>
       {data.areas.map(({ area, activeDates }) => (
         <AreaCard
           key={area.id}
@@ -38,7 +72,7 @@ export function Dashboard() {
           showPages={area.name.toLowerCase() === 'reading'}
         />
       ))}
-      {!hasReadingArea && data.pagesPerWeek.some((w) => w.pages > 0) && (
+      {!hasReadingArea && data.pagesRead.some((w) => w.pages > 0) && (
         <section className="card"><PagesChart data={data} color="var(--series-1)" /></section>
       )}
     </div>
@@ -53,12 +87,12 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
 
   // Quantity trackers with any minutes in the window, or still active, stacked per week.
   const quantity = trackers.filter(
-    (t) => t.kind === 'quantity' && (!t.archived || data.weeklyTotals.some((w) => w.trackerId === t.id && w.total > 0)),
+    (t) => t.kind === 'quantity' && (!t.archived || data.trackerTotals.some((w) => w.trackerId === t.id && w.total > 0)),
   );
-  const weeks = [...new Set(data.weeklyTotals.map((w) => w.weekStart))];
-  const weeklyRows = weeks.map((x) => {
+  const periods = [...new Set(data.trackerTotals.map((w) => w.periodStart))];
+  const weeklyRows = periods.map((x) => {
     const row: Record<string, string | number> = { x };
-    for (const t of quantity) row[`t${t.id}`] = data.weeklyTotals.find((w) => w.trackerId === t.id && w.weekStart === x)?.total ?? 0;
+    for (const t of quantity) row[`t${t.id}`] = data.trackerTotals.find((w) => w.trackerId === t.id && w.periodStart === x)?.total ?? 0;
     return row;
   });
   const anyMinutes = weeklyRows.some((r) => quantity.some((t) => Number(r[`t${t.id}`]) > 0));
@@ -67,7 +101,7 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
   const ratings = trackers.filter((t) => t.kind === 'rating');
   const mood = data.mood.filter((m) => ids.has(m.trackerId));
   // Every day of the 90-day window is a category, so spacing on the axis is proportional to time.
-  const moodRows = Array.from({ length: 90 }, (_, i) => addDays(data.today, i - 89)).map((x) => {
+  const moodRows = Array.from({ length: daysBetween(data.from, data.to) + 1 }, (_, i) => addDays(data.from, i)).map((x) => {
     const row: Record<string, string | number> = { x };
     for (const m of mood.filter((m) => m.date === x)) row[`t${m.trackerId}`] = m.value;
     return row;
@@ -78,9 +112,9 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
       <div className="dash-head">
         <span className="swatch" style={{ background: area.color }} />
         <h2>{area.name}</h2>
-        <span className="muted" style={{ fontSize: '0.85rem' }}>{activeDates.length} active days this year</span>
+        <span className="muted" style={{ fontSize: '0.85rem' }}>{activeDates.length} active days</span>
       </div>
-      <Heatmap dates={activeDates} end={data.today} color={area.color} />
+      <Heatmap dates={activeDates} start={data.from} end={data.to} color={area.color} />
 
       {goals.length > 0 && (
         <div className="goal-tiles">{goals.map((g) => <GoalTile key={g.id} goal={g} color={area.color} />)}</div>
@@ -88,12 +122,12 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
 
       {quantity.length > 0 && anyMinutes && (
         <>
-          <div className="chart-title">Weekly totals{units.length === 1 && units[0] ? ` (${units[0]})` : ''}, last 12 weeks</div>
+          <div className="chart-title">{data.bucket === 'week' ? 'Weekly' : 'Monthly'} totals{units.length === 1 && units[0] ? ` (${units[0]})` : ''}</div>
           <TrendChart
             kind="bar"
             data={weeklyRows}
             series={quantity.map((t, i): Series => ({ key: `t${t.id}`, label: t.name, color: SLOTS[i % SLOTS.length] }))}
-            xFormat={formatShort}
+            xFormat={data.bucket === 'week' ? formatShort : formatMonth}
             unit={units.length === 1 ? units[0] : undefined}
           />
         </>
@@ -101,7 +135,7 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
 
       {ratings.length > 0 && mood.length > 0 && (
         <>
-          <div className="chart-title">{ratings.length === 1 ? ratings[0].name : 'Ratings'}, last 90 days</div>
+          <div className="chart-title">{ratings.length === 1 ? ratings[0].name : 'Ratings'}</div>
           <TrendChart
             kind="line"
             data={moodRows}
@@ -109,6 +143,7 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
             xFormat={formatShort}
             yDomain={[1, 5]}
             yTicks={[1, 2, 3, 4, 5]}
+            dots={mood.length <= 60}
           />
         </>
       )}
@@ -121,12 +156,12 @@ function AreaCard({ area, activeDates, data, trackers, showPages }: {
 function PagesChart({ data, color }: { data: DashboardData; color: string }) {
   return (
     <>
-      <div className="chart-title">Pages read per week, last 12 weeks</div>
+      <div className="chart-title">Pages read per {data.bucket}</div>
       <TrendChart
         kind="bar"
-        data={data.pagesPerWeek.map((w) => ({ x: w.weekStart, pages: w.pages }))}
+        data={data.pagesRead.map((w) => ({ x: w.periodStart, pages: w.pages }))}
         series={[{ key: 'pages', label: 'Pages', color }]}
-        xFormat={formatShort}
+        xFormat={data.bucket === 'week' ? formatShort : formatMonth}
         unit="pages"
       />
     </>

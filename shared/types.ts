@@ -96,15 +96,20 @@ export interface ReadingLogResult {
 
 export type GoalWithProgress = Goal & { items: GoalItem[]; progress: GoalProgress };
 
+/** Everything on the dashboard for the range [from, to]. Goals always show their current progress. */
 export interface DashboardData {
   today: DateStr;
-  /** Active dates over the last 365 days, ascending. */
+  from: DateStr;
+  to: DateStr;
+  /** Bar size for totals: weeks for ranges up to ~26 weeks, months beyond. */
+  bucket: Period;
+  /** Active dates within the range, ascending. */
   areas: { area: Area; activeDates: DateStr[] }[];
   goals: GoalWithProgress[];
-  /** Quantity trackers, last 12 weeks including the current one, zero-filled. */
-  weeklyTotals: { trackerId: number; weekStart: DateStr; total: number }[];
-  /** Rating entries over the last 90 days, ascending by date. */
+  /** Quantity trackers, one row per bucket overlapping the range, zero-filled. Only days inside the range count. */
+  trackerTotals: { trackerId: number; periodStart: DateStr; total: number }[];
+  /** Rating entries within the range, ascending by date. */
   mood: { trackerId: number; date: DateStr; value: number }[];
-  /** Last 12 weeks including the current one, zero-filled. */
-  pagesPerWeek: { weekStart: DateStr; pages: number }[];
+  /** Pages read per bucket, zero-filled. */
+  pagesRead: { periodStart: DateStr; pages: number }[];
 }
