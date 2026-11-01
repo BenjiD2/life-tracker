@@ -8,7 +8,8 @@
     "test": "vitest run",
     "dev": "concurrently \"tsx watch server/index.ts\" \"vite\"",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "backup": "tsx server/scripts/backup.ts"
   },
   "repository": {
     "type": "git",
