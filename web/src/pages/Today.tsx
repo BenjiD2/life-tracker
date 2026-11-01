@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { addDays, todayLocal } from '../../../shared/dates';
+import { groupBySubject } from '../../../shared/subjects';
 import type { Area, BookWithPage, DateStr, Entry, GoalWithProgress, Tracker } from '../../../shared/types';
 import * as api from '../api';
 import { GoalStrip } from '../components/GoalStrip';
@@ -85,15 +86,20 @@ export function Today() {
         return (
           <section key={area.id} className="card area-card" style={{ borderLeftColor: area.color }}>
             <h2>{area.name}</h2>
-            {own.map((t) => (
-              <TrackerInput
-                key={`${t.id}-${date}`}
-                tracker={t}
-                entry={entries.find((e) => e.trackerId === t.id)}
-                onSave={(v, n) => save(t, v, n)}
-                onClear={() => clear(t)}
-                error={errors[`t${t.id}`]}
-              />
+            {groupBySubject(own).map((g) => (
+              <div key={g.key ?? ''}>
+                {g.label !== null && <h3 className="subject-head">{g.label}</h3>}
+                {g.trackers.map((t) => (
+                  <TrackerInput
+                    key={`${t.id}-${date}`}
+                    tracker={t}
+                    entry={entries.find((e) => e.trackerId === t.id)}
+                    onSave={(v, n) => save(t, v, n)}
+                    onClear={() => clear(t)}
+                    error={errors[`t${t.id}`]}
+                  />
+                ))}
+              </div>
             ))}
           </section>
         );

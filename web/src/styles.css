@@ -76,6 +76,7 @@ input[type='checkbox'] { width: 1.15rem; height: 1.15rem; accent-color: var(--ac
 .quantity { display: inline-flex; gap: 0.4rem; align-items: center; }
 .quantity input { width: 6rem; }
 .unit { color: var(--muted); font-size: 0.9rem; }
+.subject-head { font-size: 0.9rem; color: var(--muted); margin: 0.8rem 0 0.3rem; }
 .rating { display: inline-flex; gap: 0.3rem; }
 .rating button { width: 2.2rem; }
 .rating button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
