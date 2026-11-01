@@ -56,7 +56,8 @@ copy a snapshot over `tracker.db`.
 areas        id, name, color
 trackers     id, area_id → areas, name, kind ('check'|'quantity'|'rating'),
              unit (nullable), archived (bool, default false),
-             subject (nullable), minutes_per_unit (real, nullable)
+             subject (nullable), minutes_per_unit (real, nullable),
+             position (integer, saved order)
 entries      id, tracker_id → trackers, date ('YYYY-MM-DD'), value (number),
              note (nullable)
              UNIQUE (tracker_id, date)
@@ -102,6 +103,28 @@ An area can hold any mix of tracker kinds.
 - **Minutes per unit** (quantity trackers only, positive) is how many minutes
   one unit is worth, so lessons, modules, or chapters can be converted into
   estimated time.
+
+### Order
+
+- Trackers are ordered by ascending `position`, ties by id, everywhere. A new
+  tracker gets the highest position + 1, so it lands at the end of its group;
+  changing its subject or area keeps its position. (The migration that added
+  the column set `position = id`, keeping creation order.)
+- Groups within an area (`groupBySubject` in `shared/subjects.ts`): the
+  no-subject group first, then subjects by the lowest position among their
+  trackers, archived included. Group order is always worked out from the
+  area's full list, so Manage, Today and the Dashboard agree.
+- **Moves** (pure functions in `shared/subjects.ts`) look for neighbours only
+  among active trackers in the same area. A tracker swaps with the nearest one
+  above or below in its group. A subject swaps its whole block (archived
+  trackers included, internal order kept) with the nearest subject that has an
+  active tracker; the area's existing position numbers are handed out in the
+  new order, so interleaved blocks work and other areas don't move. The
+  no-subject group never moves, and no subject passes it. A move that isn't
+  possible changes nothing. There is no separate list of subjects.
+- `PUT /api/trackers/order` takes `{ ids }`, every tracker id (archived
+  included) in the new order, and sets each position to its index in one
+  transaction. `GET /api/trackers` returns trackers in this order.
 
 ### Starting configuration (seed data)
 
@@ -177,7 +200,7 @@ Example: *Read 20 books in 2026.*
    (◀ ▶) allows logging past days. A reading row allows updating the page for
    any book with status `reading`. A strip at the top shows current goal
    progress. Inside an area, trackers with a subject sit under a small subject
-   heading: ungrouped trackers first, then subjects alphabetically.
+   heading: ungrouped trackers first, then subjects, in the saved order (§3).
 2. **Dashboard.** A time-range filter above the cards: presets (last 4 weeks,
    last 12 weeks (default), last 6 months, this year, last 12 months) and a
    custom from–to range, kept in the URL. One card per area: heatmap of active
@@ -192,8 +215,12 @@ Example: *Read 20 books in 2026.*
      "No subject" stack for time-counting trackers outside any subject), shown
      when the area has a subject and two or more stacks have time.
    - Ungrouped trackers: one chart per unit, then the rating trend.
-   - One bordered section per subject, alphabetically, with the same charts
-     for its trackers.
+   - One bordered section per subject, in the saved order (§3), with the same
+     charts for its trackers.
+
+   Subject stacks and each chart's series follow the saved order ("No subject"
+   stays the last stack). Colours are assigned by that order, so reordering
+   changes a tracker's colour.
 
    Ungrouped trackers and each subject section also get **Estimated total
    time** (hours, stacked by tracker) when any of their trackers has minutes
@@ -213,7 +240,12 @@ Example: *Read 20 books in 2026.*
    one. Each tracker has a subject field (suggesting the subjects already
    used in its area) and, for quantity trackers, a "≈ [ ] min each" field. That
    field shows when the unit isn't a minute unit, or when a value is already
-   set, so it can still be cleared after a unit is renamed.
+   set, so it can still be cleared after a unit is renamed. Each area's active
+   trackers are grouped by subject like Today, with ↑ / ↓ on each tracker
+   (move within its group) and on each subject heading (move the subject); a
+   button that can't move is disabled, and all of them are while a move saves.
+   One click is one step and saves straight away. The archived list is
+   unordered.
 
 ## 6. Code organization
 
@@ -223,7 +255,7 @@ life-tracker/
 │   ├── books-area.ts        which area counts reading
 │   ├── dates.ts             date strings, week/month periods
 │   ├── enums.ts             allowed values for the database and request schemas
-│   ├── subjects.ts          subject grouping, minutes-per-unit rule
+│   ├── subjects.ts          subject grouping and order, moves, minutes-per-unit rule
 │   ├── types.ts             row types (from the Drizzle schema) and API types
 │   └── schemas.ts           Zod input schemas
 ├── server/
@@ -262,6 +294,9 @@ plain values, so they can be tested without a database.
     creation date.
   - `minutes_per_unit` is positive and finite, or null; a non-null value on a
     check or rating tracker is refused (400). An empty subject is stored as null.
+  - `position` is refused on tracker create and edit (400); it changes only
+    through `PUT /api/trackers/order`, whose `ids` must list every tracker
+    exactly once (400 otherwise).
   - A book's `start_page` is between 0 and `total_pages`, and `total_pages`
     can't drop below `start_page` or any logged `page_reached`.
 - **Blank fields:** blanking a page or a required number reverts it; it never
