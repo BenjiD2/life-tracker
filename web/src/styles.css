@@ -131,6 +131,8 @@ input[type='checkbox'] { width: 1.15rem; height: 1.15rem; accent-color: var(--ac
 .pace-track { position: relative; height: 8px; background: var(--cell-empty); border-radius: 4px; }
 .pace-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
 .pace-marker { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); border-radius: 1px; }
+.subject-section { border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.8rem; margin-top: 1rem; }
+.subject-section h3 { font-size: 0.95rem; margin: 0; }
 .chart-title { font-size: 0.85rem; color: var(--muted); margin: 0.8rem 0 0.2rem; }
 .chart-tooltip {
   background: var(--surface); border: 1px solid var(--border); border-radius: 6px;

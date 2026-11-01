@@ -2,10 +2,15 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 
+// Categorical slots in fixed order (dataviz reference palette); a series keeps its slot by position, never by rank.
+export const SLOTS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
+
 export interface Series {
   key: string;
   label: string;
   color: string;
+  /** Bar fill opacity; lighter marks an estimated series. */
+  opacity?: number;
 }
 
 /**
@@ -14,7 +19,7 @@ export interface Series {
  * A legend appears only with two or more series (a single series is named by the chart title).
  */
 export function TrendChart({
-  data, series, kind, height = 180, xFormat, yDomain, yTicks, unit, dots = true,
+  data, series, kind, height = 180, xFormat, yDomain, yTicks, unit, dots = true, decimals = false,
 }: {
   data: Record<string, string | number>[];
   series: Series[];
@@ -26,13 +31,15 @@ export function TrendChart({
   unit?: string;
   /** Line charts: draw a dot per point. Off for dense ranges, where dots pile into clutter. */
   dots?: boolean;
+  /** Allow fractional y ticks (e.g. hours). */
+  decimals?: boolean;
 }) {
   const axis = { stroke: 'var(--axis)', tick: { fill: 'var(--ink-muted)', fontSize: 11 }, tickLine: false };
   const common = (
     <>
       <CartesianGrid vertical={false} stroke="var(--grid)" />
       <XAxis dataKey="x" {...axis} tickFormatter={xFormat} minTickGap={16} />
-      <YAxis {...axis} axisLine={false} width={36} domain={yDomain} ticks={yTicks} allowDecimals={false} />
+      <YAxis {...axis} axisLine={false} width={36} domain={yDomain} ticks={yTicks} allowDecimals={decimals} />
       <Tooltip
         cursor={kind === 'bar' ? { fill: 'var(--cell-empty)', opacity: 0.6 } : { stroke: 'var(--axis)' }}
         content={({ active, payload, label }) =>
@@ -62,7 +69,7 @@ export function TrendChart({
         <BarChart data={data} barCategoryGap="25%">
           {common}
           {series.map((s, i) => (
-            <Bar key={s.key} dataKey={s.key} name={s.label} stackId="a" fill={s.color}
+            <Bar key={s.key} dataKey={s.key} name={s.label} stackId="a" fill={s.color} fillOpacity={s.opacity}
               // 2px surface gap between stacked segments; only the top segment gets rounded ends.
               stroke="var(--surface)" strokeWidth={2}
               radius={i === series.length - 1 ? [4, 4, 0, 0] : 0} isAnimationActive={false} />
