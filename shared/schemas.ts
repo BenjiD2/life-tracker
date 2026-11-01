@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isDateStr } from './dates';
+import { BOOK_STATUSES, KINDS, PERIODS } from './enums';
 
 export const dateStr = z.string().refine(isDateStr, 'must be a real date in YYYY-MM-DD form');
 const id = z.number().int().positive();
@@ -17,7 +18,7 @@ const minutesPerUnit = z.number().finite().positive('must be more than 0').nulla
 export const trackerInput = z.object({
   areaId: id,
   name,
-  kind: z.enum(['check', 'quantity', 'rating']),
+  kind: z.enum(KINDS),
   unit: z.string().trim().min(1).nullish(),
   subject: subject.optional(),
   minutesPerUnit: minutesPerUnit.optional(),
@@ -54,7 +55,7 @@ export const bookInput = z.object({ title: name, author: name, totalPages: pages
 export const bookPatch = z
   .object({
     title: name, author: name, totalPages: pages, topic: optionalText, startPage,
-    status: z.enum(['reading', 'done', 'dropped']),
+    status: z.enum(BOOK_STATUSES),
     /** When the book was finished, if not today (e.g. the last page was logged on a past date). */
     finished: dateStr,
   })
@@ -90,7 +91,7 @@ export const goalInput = z.discriminatedUnion('type', [
   z.object({
     ...goalBase,
     type: z.literal('consistency'),
-    period: z.enum(['week', 'month']),
+    period: z.enum(PERIODS),
     targetDays: z.number().int().min(1, 'must be at least 1'),
     scopeTrackerId: id.nullish(),
   }),

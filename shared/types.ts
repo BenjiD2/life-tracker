@@ -1,84 +1,22 @@
+import type { areas, books, entries, goalItems, goals, readingLog, trackers } from '../server/db/schema';
+import type { BOOK_STATUSES, GOAL_SOURCES, GOAL_TYPES, KINDS, PERIODS } from './enums';
+
 /** A calendar date in local time, formatted 'YYYY-MM-DD'. */
 export type DateStr = string;
-export type Period = 'week' | 'month';
-export type Kind = 'check' | 'quantity' | 'rating';
+export type Period = (typeof PERIODS)[number];
+export type Kind = (typeof KINDS)[number];
+export type BookStatus = (typeof BOOK_STATUSES)[number];
+export type GoalType = (typeof GOAL_TYPES)[number];
+export type GoalSource = (typeof GOAL_SOURCES)[number];
 
-// Row types mirror server/db/schema.ts as plain interfaces, so the web never imports server code.
-
-export interface Area {
-  id: number;
-  name: string;
-  color: string;
-}
-
-export interface Tracker {
-  id: number;
-  areaId: number;
-  name: string;
-  kind: Kind;
-  unit: string | null;
-  archived: boolean;
-  /** Free-text tag grouping trackers within an area; see shared/subjects.ts. */
-  subject: string | null;
-  /** Quantity trackers only: minutes one unit is worth, for estimated time. */
-  minutesPerUnit: number | null;
-}
-
-export interface Entry {
-  id: number;
-  trackerId: number;
-  date: DateStr;
-  value: number;
-  note: string | null;
-}
-
-export type BookStatus = 'reading' | 'done' | 'dropped';
-
-export interface Book {
-  id: number;
-  title: string;
-  author: string;
-  totalPages: number;
-  /** Page already reached before tracking began (0 for a new book). */
-  startPage: number;
-  status: BookStatus;
-  topic: string | null;
-  started: DateStr | null;
-  finished: DateStr | null;
-}
-
-export interface ReadingLogRow {
-  id: number;
-  bookId: number;
-  date: DateStr;
-  pageReached: number;
-}
-
-export type GoalType = 'consistency' | 'completion';
-export type GoalSource = 'books' | 'tracker' | 'checklist';
-
-export interface Goal {
-  id: number;
-  title: string;
-  areaId: number;
-  type: GoalType;
-  created: DateStr;
-  scopeTrackerId: number | null;
-  period: Period | null;
-  targetDays: number | null;
-  source: GoalSource | null;
-  target: number | null;
-  deadline: DateStr | null;
-  sourceTrackerId: number | null;
-  bookTopic: string | null;
-}
-
-export interface GoalItem {
-  id: number;
-  goalId: number;
-  label: string;
-  doneAt: DateStr | null;
-}
+// Row types come from the schema. These imports are type-only, so the web still bundles no server code.
+export type Area = typeof areas.$inferSelect;
+export type Tracker = typeof trackers.$inferSelect;
+export type Entry = typeof entries.$inferSelect;
+export type Book = typeof books.$inferSelect;
+export type ReadingLogRow = typeof readingLog.$inferSelect;
+export type Goal = typeof goals.$inferSelect;
+export type GoalItem = typeof goalItems.$inferSelect;
 
 /** Calculated, never stored. `percent` is 0–100, and 0 when `target` is 0. */
 export interface GoalProgress {

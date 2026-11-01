@@ -1,4 +1,5 @@
 import { integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { BOOK_STATUSES, GOAL_SOURCES, GOAL_TYPES, KINDS, PERIODS } from '../../shared/enums';
 
 export const areas = sqliteTable('areas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -10,10 +11,12 @@ export const trackers = sqliteTable('trackers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   areaId: integer('area_id').notNull().references(() => areas.id),
   name: text('name').notNull(),
-  kind: text('kind', { enum: ['check', 'quantity', 'rating'] }).notNull(),
+  kind: text('kind', { enum: KINDS }).notNull(),
   unit: text('unit'),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  /** Free-text tag grouping trackers within an area; see shared/subjects.ts. */
   subject: text('subject'),
+  /** Quantity trackers only: minutes one unit is worth, for estimated time. */
   minutesPerUnit: real('minutes_per_unit'),
 });
 
@@ -36,7 +39,7 @@ export const books = sqliteTable('books', {
   totalPages: integer('total_pages').notNull(),
   /** Page already reached before tracking began; the first log's pages read are measured from here. */
   startPage: integer('start_page').notNull().default(0),
-  status: text('status', { enum: ['reading', 'done', 'dropped'] }).notNull(),
+  status: text('status', { enum: BOOK_STATUSES }).notNull(),
   topic: text('topic'),
   started: text('started'),
   finished: text('finished'),
@@ -57,14 +60,14 @@ export const goals = sqliteTable('goals', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
   areaId: integer('area_id').notNull().references(() => areas.id),
-  type: text('type', { enum: ['consistency', 'completion'] }).notNull(),
+  type: text('type', { enum: GOAL_TYPES }).notNull(),
   created: text('created').notNull(),
   // consistency fields
   scopeTrackerId: integer('scope_tracker_id').references(() => trackers.id),
-  period: text('period', { enum: ['week', 'month'] }),
+  period: text('period', { enum: PERIODS }),
   targetDays: integer('target_days'),
   // completion fields
-  source: text('source', { enum: ['books', 'tracker', 'checklist'] }),
+  source: text('source', { enum: GOAL_SOURCES }),
   target: real('target'),
   deadline: text('deadline'),
   sourceTrackerId: integer('source_tracker_id').references(() => trackers.id),
