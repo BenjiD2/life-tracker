@@ -38,7 +38,7 @@
 
 **Interfaces:**
 - Produces:
-  - `groupBySubject<T extends { id: number; subject: string | null; position: number }>(trackers: T[], all: { id: number; subject: string | null; position: number }[] = trackers): SubjectGroup<T>[]`: groups `trackers`; within a group, trackers sorted by position then id; the no-subject group first; subjects ordered by the lowest position among the trackers in `all` with that subject key (callers pass the area's full list, archived included).
+  - `groupBySubject<T extends { id: number; subject: string | null; position: number }>(trackers: T[], all: readonly { id: number; subject: string | null; position: number }[] = trackers): SubjectGroup<T>[]`: the existing `all` parameter (already used for labels) gains `position`. Within a group, trackers are sorted by position then id; the no-subject group first; subjects ordered by the lowest position among the trackers in `all` with that subject key (callers pass the area's full list, archived included). Labels are unchanged.
   - `type Direction = 'up' | 'down'`
   - `type OrderItem = { id: number; areaId: number; subject: string | null; archived: boolean; position: number }`
   - `moveTracker(trackers: OrderItem[], id: number, dir: Direction): number[]`: all tracker ids in the new order.
@@ -69,7 +69,7 @@
   give seq[k] the position slots[k]; other areas keep theirs
   return all ids sorted by (new position, id)
   ```
-- [ ] **Step 7: Run** `npx vitest run shared/subjects.test.ts && npm run typecheck`. Expected: PASS. Typecheck will fail where `Tracker` lacks `position`; add `position: number` to `Tracker` in `shared/types.ts` now (Task 2 adds the column).
+- [ ] **Step 7: Run** `npx vitest run shared/subjects.test.ts`. Expected: PASS. (`Tracker` is inferred from the schema, so pages calling `groupBySubject` won't typecheck until Task 2 adds the column: run `npm run typecheck` at the end of Task 2, not here.)
 - [ ] **Step 8: Commit** `feat: tracker and subject order functions`.
 
 ### Task 2: Position column, order endpoint
@@ -81,7 +81,7 @@
 
 **Interfaces:**
 - Consumes: `Tracker.position` (Task 1).
-- Produces: `trackers.position` column (`integer('position').notNull().default(0)`); `trackerOrder = z.object({ ids: z.array(id) })` and `TrackerOrder` in `shared/schemas.ts`; `PUT /api/trackers/order` returning `Tracker[]` in order; `api.reorderTrackers(ids: number[]): Promise<Tracker[]>`.
+- Produces: `trackers.position` column (`integer('position').notNull().default(0)`), which `Tracker` picks up automatically (it's inferred from the schema); `trackerOrder = z.object({ ids: z.array(id) })` and `TrackerOrder` in `shared/schemas.ts`; `PUT /api/trackers/order` returning `Tracker[]` in order; `api.reorderTrackers(ids: number[]): Promise<Tracker[]>`.
 
 - [ ] **Step 1: Write failing route tests** in `catalog.test.ts`, `describe('tracker order')`:
   - A POSTed tracker's `position` is greater than every seeded tracker's.
@@ -98,7 +98,7 @@
   - POST `/trackers`: `position` = (max position over all trackers) + 1, or 0 when none.
   - GET `/trackers`: `orderBy(trackers.position, trackers.id)`.
   - PUT `/trackers/order`: validate with `trackerOrder`; 400 `'Order must list every tracker exactly once'` unless the ids are exactly the set of tracker ids with no duplicates; then in one `db.transaction` set `position = index`; return GET's result.
-  - `web/src/api.ts`: `reorderTrackers`.
+  - `web/src/api.ts`: `export const reorderTrackers = (ids: number[]) => body(api.trackers.order.$put({ json: { ids } }))` (the client is typed from the routes, so the route must be chained onto the `catalogRoutes` Hono instance like the others).
 - [ ] **Step 5: Run** `npm run backup`, then `npm run db:generate`. Expected: a new `0003_*.sql` with one `ALTER TABLE trackers ADD position integer DEFAULT 0 NOT NULL`. Append `--> statement-breakpoint` and `UPDATE trackers SET position = id;` to it.
 - [ ] **Step 6: Run** `npm test && npm run typecheck`. Expected: PASS.
 - [ ] **Step 7: Commit** `feat: saved tracker order`.
@@ -111,9 +111,9 @@
 **Interfaces:**
 - Consumes: `groupBySubject`, `moveTracker`, `moveSubject`, `canMoveTracker`, `canMoveSubject` (Task 1); `api.reorderTrackers` (Task 2).
 
-- [ ] **Step 1: Manage.** For each area, render `groupBySubject(activeOwn, allOwn)` where `allOwn` is the area's trackers including archived. No-subject rows first with no heading; each subject gets a heading row with its label and ↑ / ↓. Each tracker row gets ↑ / ↓ before the Archive button. Clicks call `attempt(() => api.reorderTrackers(moveTracker(trackers, t.id, dir)))` (or `moveSubject(trackers, areaId, g.key, dir)`), using the full `trackers` list. Buttons are disabled when `canMove…` is false, or while a reorder is saving (Review Focus 5). Buttons have `aria-label`s like `Move Chinese lessons up` and `Move subject Chinese up`.
-- [ ] **Step 2: Today.** `groupBySubject(own, trackers.filter((t) => t.areaId === area.id))`.
-- [ ] **Step 3: Dashboard.** In `AreaCard`, `groupBySubject(visibleTrackers(trackers, data), trackers)` (`trackers` is already the area's full list). No change to `AreaCharts.tsx`: series follow group order, and `minutesBySubject` keeps "No subject" last.
+- [ ] **Step 1: Manage.** (`attempt` now comes from `web/src/useAttempt.ts`.) For each area, render `groupBySubject(activeOwn, allOwn)` where `allOwn` is the area's trackers including archived. No-subject rows first with no heading; each subject gets a heading row with its label and ↑ / ↓. Each tracker row gets ↑ / ↓ before the Archive button. Clicks call `attempt(() => api.reorderTrackers(moveTracker(trackers, t.id, dir)))` (or `moveSubject(trackers, areaId, g.key, dir)`), using the full `trackers` list. Buttons are disabled when `canMove…` is false, or while a reorder is saving (Review Focus 5). Buttons have `aria-label`s like `Move Chinese lessons up` and `Move subject Chinese up`.
+- [ ] **Step 2: Today.** Already calls `groupBySubject(own, trackers.filter((t) => t.areaId === area.id))` (from the review-fixes refactor); confirm it still does and needs no change.
+- [ ] **Step 3: Dashboard.** `AreaCard` already calls `groupBySubject(visibleTrackers(trackers, data), trackers)` (`trackers` is the area's full list); confirm, no change expected. No change to `AreaCharts.tsx`: series follow group order, and `minutesBySubject` keeps "No subject" last.
 - [ ] **Step 4: Style** the ↑ / ↓ buttons small and quiet (reuse `button.link` or a compact `.move` class), and the Manage subject heading like `.subject-head`.
 - [ ] **Step 5: Run** `npm test && npm run typecheck`. Expected: PASS.
 - [ ] **Step 6: Commit** `feat: reorder trackers and subjects in Manage`.
