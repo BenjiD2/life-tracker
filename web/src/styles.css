@@ -79,6 +79,10 @@ input[type='checkbox'] { width: 1.15rem; height: 1.15rem; accent-color: var(--ac
 .quantity input { width: 6rem; }
 .unit { color: var(--muted); font-size: 0.9rem; }
 .subject-head { font-size: 0.9rem; color: var(--muted); margin: 0.8rem 0 0.3rem; }
+.manage-subject .subject-head { margin: 0; font-weight: 600; }
+.moves { display: inline-flex; gap: 0.15rem; margin-left: auto; }
+button.move { padding: 0.1rem 0.4rem; font-size: 0.8rem; color: var(--muted); }
+button.move:disabled { opacity: 0.3; cursor: default; }
 .rating { display: inline-flex; gap: 0.3rem; }
 .rating button { width: 2.2rem; }
 .rating button.on { background: var(--accent); border-color: var(--accent); color: #fff; }

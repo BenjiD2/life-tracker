@@ -1,6 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import type { GoalInput } from '../../../shared/schemas';
-import { groupBySubject, isMinuteUnit } from '../../../shared/subjects';
+import {
+  canMoveSubject, canMoveTracker, groupBySubject, isMinuteUnit, moveSubject, moveTracker, type Direction,
+} from '../../../shared/subjects';
 import type { Area, GoalSource, GoalWithProgress, Kind, Period, Tracker } from '../../../shared/types';
 import * as api from '../api';
 import { InlineText } from '../components/InlineText';
@@ -76,6 +78,22 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
   const subjectsList = (areaId: number) => `subjects-${areaId}`;
   const minutesOrNull = (v: string) => (v.trim() ? Number(v) : null);
 
+  // Each move is computed from the last saved list, so buttons stay off until the save and re-read finish:
+  // a second click before then would work from the stale order and undo the first.
+  const [reordering, setReordering] = useState(false);
+  const reorder = async (ids: number[]) => {
+    setReordering(true);
+    try { await attempt('order', () => api.reorderTrackers(ids)); } finally { setReordering(false); }
+  };
+  const moveButtons = (what: string, can: (d: Direction) => boolean, order: (d: Direction) => number[]) => (
+    <span className="moves">
+      {(['up', 'down'] as const).map((d) => (
+        <button key={d} type="button" className="move" aria-label={`Move ${what} ${d}`} disabled={reordering || !can(d)}
+          onClick={() => reorder(order(d))}>{d === 'up' ? '↑' : '↓'}</button>
+      ))}
+    </span>
+  );
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     attempt('new', async () => {
@@ -114,7 +132,8 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
           min each
         </label>
       )}
-      <button type="button" style={{ marginLeft: 'auto' }}
+      {moveButtons(t.name, (d) => canMoveTracker(trackers, t.id, d), (d) => moveTracker(trackers, t.id, d))}
+      <button type="button"
         onClick={() => attempt(`t${t.id}`, () => api.updateTracker(t.id, { archived: !t.archived }))}>
         {t.archived ? 'Unarchive' : 'Archive'}
       </button>
@@ -122,18 +141,32 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
     </li>
   );
 
-  const active = trackers.filter((t) => !t.archived);
   const archived = trackers.filter((t) => t.archived);
 
   return (
     <section className="card">
       <h2>Trackers</h2>
+      {errors.order && <div className="field-error">{errors.order}</div>}
       {areas.map((a) => {
-        const own = active.filter((t) => t.areaId === a.id);
+        const allOwn = trackers.filter((t) => t.areaId === a.id);
+        const own = allOwn.filter((t) => !t.archived);
         return own.length === 0 ? null : (
           <div key={a.id} style={{ marginBottom: '0.6rem' }}>
             <h3 style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>{a.name}</h3>
-            <ul className="list">{own.map(row)}</ul>
+            <ul className="list">
+              {groupBySubject(own, allOwn).map((g) => (
+                <Fragment key={g.key ?? ''}>
+                  {g.key !== null && (
+                    <li className="row manage-subject">
+                      <span className="subject-head">{g.label}</span>
+                      {moveButtons(`subject ${g.label}`, (d) => canMoveSubject(trackers, a.id, g.key!, d),
+                        (d) => moveSubject(trackers, a.id, g.key!, d))}
+                    </li>
+                  )}
+                  {g.trackers.map(row)}
+                </Fragment>
+              ))}
+            </ul>
           </div>
         );
       })}
