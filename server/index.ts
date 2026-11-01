@@ -4,7 +4,8 @@ import { createApp } from './app';
 import { createDb } from './db/client';
 import { seedIfEmpty } from './db/seed';
 
-const db = createDb('tracker.db');
+// TRACKER_DB lets a throwaway database be used for trying things out.
+const db = createDb(process.env.TRACKER_DB ?? 'tracker.db');
 seedIfEmpty(db);
 const app = createApp(db, () => todayLocal());
 
