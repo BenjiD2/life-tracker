@@ -1,0 +1,51 @@
+import { eq } from 'drizzle-orm';
+import { Hono } from 'hono';
+import { areaInput, areaPatch, trackerInput, trackerPatch } from '../../shared/schemas';
+import type { Db } from '../db/client';
+import { areas, goals, trackers } from '../db/schema';
+import { fail, paramId, validate } from './http';
+
+export function catalogRoutes(db: Db) {
+  const findArea = (id: number | null) => (id === null ? undefined : db.select().from(areas).where(eq(areas.id, id)).get());
+
+  return new Hono()
+    .get('/areas', (c) => c.json(db.select().from(areas).all()))
+    .post('/areas', validate('json', areaInput), (c) => {
+      const row = db.insert(areas).values(c.req.valid('json')).returning().get();
+      return c.json(row, 201);
+    })
+    .patch('/areas/:id', validate('json', areaPatch), (c) => {
+      const area = findArea(paramId(c));
+      if (!area) return fail(c, 404, 'Area not found');
+      const patch = c.req.valid('json');
+      if (Object.keys(patch).length === 0) return c.json(area);
+      return c.json(db.update(areas).set(patch).where(eq(areas.id, area.id)).returning().get());
+    })
+    .delete('/areas/:id', (c) => {
+      const area = findArea(paramId(c));
+      if (!area) return fail(c, 404, 'Area not found');
+      if (db.select({ id: trackers.id }).from(trackers).where(eq(trackers.areaId, area.id)).limit(1).get())
+        return fail(c, 409, `"${area.name}" still has trackers; move or delete them first`);
+      if (db.select({ id: goals.id }).from(goals).where(eq(goals.areaId, area.id)).limit(1).get())
+        return fail(c, 409, `"${area.name}" still has goals; delete them first`);
+      db.delete(areas).where(eq(areas.id, area.id)).run();
+      return c.body(null, 204);
+    })
+
+    .get('/trackers', (c) => c.json(db.select().from(trackers).all()))
+    .post('/trackers', validate('json', trackerInput), (c) => {
+      const input = c.req.valid('json');
+      if (!findArea(input.areaId)) return fail(c, 404, 'Area not found');
+      const row = db.insert(trackers).values({ ...input, unit: input.unit ?? null }).returning().get();
+      return c.json(row, 201);
+    })
+    .patch('/trackers/:id', validate('json', trackerPatch), (c) => {
+      const id = paramId(c);
+      const tracker = id === null ? undefined : db.select().from(trackers).where(eq(trackers.id, id)).get();
+      if (!tracker) return fail(c, 404, 'Tracker not found');
+      const patch = c.req.valid('json');
+      if (patch.areaId !== undefined && !findArea(patch.areaId)) return fail(c, 404, 'Area not found');
+      if (Object.keys(patch).length === 0) return c.json(tracker);
+      return c.json(db.update(trackers).set(patch).where(eq(trackers.id, tracker.id)).returning().get());
+    });
+}
