@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { GoalInput } from '../../../shared/schemas';
+import { groupBySubject, isMinuteUnit } from '../../../shared/subjects';
 import type { Area, GoalSource, GoalWithProgress, Kind, Period, Tracker } from '../../../shared/types';
 import * as api from '../api';
 import { InlineText } from '../components/InlineText';
@@ -80,18 +81,27 @@ function AreasSection({ areas, refresh }: { areas: Area[]; refresh: () => Promis
 
 function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers: Tracker[]; refresh: () => Promise<unknown> }) {
   const { error, attempt } = useAttempt(refresh);
-  const [form, setForm] = useState<{ areaId: string; name: string; kind: Kind; unit: string }>({ areaId: '', name: '', kind: 'check', unit: '' });
+  const [form, setForm] = useState<{ areaId: string; name: string; kind: Kind; unit: string; subject: string; minutesPerUnit: string }>(
+    { areaId: '', name: '', kind: 'check', unit: '', subject: '', minutesPerUnit: '' },
+  );
+  const formAreaId = Number(form.areaId || areas[0]?.id);
+  const showMinutesPerUnit = (unit: string | null, current: number | null) => !isMinuteUnit(unit) || current !== null;
+  const subjectsList = (areaId: number) => `subjects-${areaId}`;
+  const minutesOrNull = (v: string) => (v.trim() ? Number(v) : null);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     attempt(async () => {
+      const quantity = form.kind === 'quantity';
       await api.createTracker({
-        areaId: Number(form.areaId || areas[0]?.id),
+        areaId: formAreaId,
         name: form.name,
         kind: form.kind,
-        unit: form.kind === 'quantity' && form.unit ? form.unit : null,
+        unit: quantity && form.unit ? form.unit : null,
+        subject: form.subject,
+        minutesPerUnit: quantity && showMinutesPerUnit(form.unit, null) ? minutesOrNull(form.minutesPerUnit) : null,
       });
-      setForm({ ...form, name: '', unit: '' });
+      setForm({ ...form, name: '', unit: '', minutesPerUnit: '' });
     });
   };
 
@@ -107,6 +117,16 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
         <InlineText label={`Unit of ${t.name}`} width="7rem" placeholder="unit" value={t.unit ?? ''}
           onSave={(v) => attempt(() => api.updateTracker(t.id, { unit: v.trim() || null }))} />
       )}
+      {t.kind === 'quantity' && showMinutesPerUnit(t.unit, t.minutesPerUnit) && (
+        <label className="row muted" title="Estimated minutes per unit, for estimated total time">≈
+          <InlineText type="number" label={`Estimated minutes per unit of ${t.name}`} width="4.5rem" placeholder="—"
+            value={t.minutesPerUnit === null ? '' : String(t.minutesPerUnit)}
+            onSave={(v) => attempt(() => api.updateTracker(t.id, { minutesPerUnit: minutesOrNull(v) }))} />
+          min each
+        </label>
+      )}
+      <InlineText label={`Subject of ${t.name}`} width="7rem" placeholder="subject" list={subjectsList(t.areaId)}
+        value={t.subject ?? ''} onSave={(v) => attempt(() => api.updateTracker(t.id, { subject: v }))} />
       <button type="button" style={{ marginLeft: 'auto' }}
         onClick={() => attempt(() => api.updateTracker(t.id, { archived: !t.archived }))}>
         {t.archived ? 'Unarchive' : 'Archive'}
@@ -129,6 +149,11 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
           </div>
         );
       })}
+      {areas.map((a) => (
+        <datalist key={a.id} id={subjectsList(a.id)}>
+          {groupBySubject(trackers.filter((t) => t.areaId === a.id)).flatMap((g) => (g.label === null ? [] : [<option key={g.key} value={g.label} />]))}
+        </datalist>
+      ))}
       <form className="row" onSubmit={submit} style={{ marginTop: '0.6rem' }}>
         <select aria-label="New tracker area" value={form.areaId || areas[0]?.id || ''} onChange={(e) => setForm({ ...form, areaId: e.target.value })}>
           {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -142,6 +167,15 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
         {form.kind === 'quantity' && (
           <input type="text" aria-label="New tracker unit" placeholder="unit (e.g. minutes)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
         )}
+        {form.kind === 'quantity' && showMinutesPerUnit(form.unit, null) && (
+          <label className="row muted">≈
+            <input type="number" aria-label="New tracker estimated minutes per unit" placeholder="—" style={{ width: '4.5rem' }}
+              value={form.minutesPerUnit} onChange={(e) => setForm({ ...form, minutesPerUnit: e.target.value })} />
+            min each
+          </label>
+        )}
+        <input type="text" aria-label="New tracker subject" placeholder="subject (optional)" list={subjectsList(formAreaId)} style={{ width: '9rem' }}
+          value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
         <button type="submit" className="primary">Add tracker</button>
       </form>
       {error && <div className="field-error">{error}</div>}
