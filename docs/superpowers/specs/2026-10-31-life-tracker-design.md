@@ -1,7 +1,7 @@
 # Life Tracker — Design Spec
 
 **Date:** 2026-10-31
-**Status:** Approved in brainstorming, pending written-spec review
+**Status:** v1 implemented 2026-10-31. This spec is kept current: change it when behaviour changes.
 
 ## 1. Purpose
 
@@ -42,9 +42,11 @@ between the user's own devices) pointing at the laptop. If always-on access is
 wanted, deploy the same code to Fly.io or Railway (~$0–5/month) and add
 authentication at that time.
 
-**Backups:** the project folder (including `tracker.db`) lives in a synced
-folder (iCloud Drive or Dropbox), or the user copies `tracker.db` manually.
-Before running any migration, copy `tracker.db` to a backup.
+**Backups:** `npm run backup` writes a dated snapshot to `backups/`
+(git-ignored) using SQLite's online backup, safe while the app runs. Run it
+before any migration. `backups/` is on the same disk, so copy snapshots to
+iCloud Drive or similar for off-machine safety. Restore: stop the server and
+copy a snapshot over `tracker.db`.
 
 ## 3. Data model
 
@@ -101,7 +103,10 @@ An area can hold any mix of tracker kinds.
 ### Derived values (calculated when needed, never stored)
 
 - **Area active day:** a date counts as active for an area if any of the area's
-  trackers has an entry on that date. No separate "worked out" checkbox.
+  trackers has an entry on that date with a non-zero value (logging `0` minutes
+  is not activity). No separate "worked out" checkbox. Books aren't linked to
+  an area, so the area named "Reading" (case-insensitive) also counts every
+  date with pages read > 0.
 - **Pages read on a date:** `page_reached` minus the previous `page_reached`
   for the same book (for a book's first log, minus its `start_page`: the page
   already reached before tracking began, so prior progress isn't counted as
@@ -133,8 +138,9 @@ Example: *Read 20 books in 2026.*
 
 - **Source** decides the current value:
   - `books`: number of books with `status = 'done'`, filtered by `book_topic`
-    when set, counting only books finished on or after the goal's creation
-    date and on or before the deadline (if any).
+    when set (case-insensitive, ignoring surrounding spaces), counting only
+    books finished on or after the goal's creation date and on or before the
+    deadline (if any).
   - `tracker`: sum of `value` across all entries of `source_tracker_id`.
   - `checklist`: number of `goal_items` with `done_at` set. The target equals
     the number of items.
@@ -150,11 +156,16 @@ Example: *Read 20 books in 2026.*
    (◀ ▶) allows logging past days. A reading row allows updating the page for
    any book with status `reading`. A strip at the top shows current goal
    progress.
-2. **Dashboard.** One card per area: heatmap of active days, goal progress
-   bars, ring, and pace line, tracker totals per week or month, mood trend
-   line, pages read per week.
+2. **Dashboard.** A time-range filter above the cards: presets (last 4 weeks,
+   last 12 weeks (default), last 6 months, this year, last 12 months) and a
+   custom from–to range, kept in the URL. One card per area: heatmap of active
+   days, goal progress bars, ring, and pace line, tracker totals, mood trend
+   line, pages read. Totals are per week for ranges up to ~26 weeks, per month
+   beyond. Heatmaps, totals, mood, and pages follow the range; goals always
+   show current progress.
 3. **Books.** Books being read now (with progress bars and a page-update
-   input), a finished shelf, adding books, and changing status.
+   input), a finished shelf, a dropped list, adding books (optionally with the
+   page already reached), editing a book's details, and changing status.
 4. **Manage.** Create, edit, and archive areas, trackers, goals, and checklist
    items.
 
@@ -162,21 +173,21 @@ Example: *Read 20 books in 2026.*
 
 ```
 life-tracker/
-├── shared/types.ts          types shared by server and browser
+├── shared/                  used by server and browser
+│   ├── dates.ts             date strings, week/month periods
+│   ├── types.ts             row and API types
+│   └── schemas.ts           Zod input schemas
 ├── server/
-│   ├── db/schema.ts         Drizzle schema
-│   ├── db/migrations/       generated SQL, committed
+│   ├── db/                  Drizzle schema, client, seed, migrations (committed)
 │   ├── stats/               pure functions, no database or HTTP access
-│   │   ├── dates.ts         date strings, week/month periods
-│   │   ├── streaks.ts       active days, period streaks
-│   │   ├── goals.ts         consistency and completion progress, pace
-│   │   └── reading.ts       pages read from page positions
 │   ├── routes/              thin handlers: validate → query → stats → JSON
+│   ├── scripts/backup.ts    npm run backup
+│   ├── app.ts               createApp(db, today)
 │   └── index.ts
 └── web/src/
     ├── api.ts               typed fetch wrappers
     ├── pages/               Today, Dashboard, Books, Manage
-    └── components/          Heatmap, ProgressRing, PaceLine, TrendChart, …
+    └── components/          Heatmap, ProgressRing, PaceBar, TrendChart, …
 ```
 
 `stats/` functions take plain arrays plus a `today` date string and return
@@ -196,10 +207,17 @@ plain values, so they can be tested without a database.
   - `quantity` value must be ≥ 0.
   - `page_reached` must be between 0 and the book's `total_pages`.
   - Goal fields must match the goal's `type` and `source`.
+  - A book's `start_page` is between 0 and `total_pages`, and `total_pages`
+    can't drop below `start_page` or any logged `page_reached`.
 - **Logging the last page:** setting `page_reached = total_pages` asks the user
-  whether to mark the book `done`, with `finished` set to that date.
+  whether to mark the book `done`, with `finished` set to the date of that log
+  (not today, when logging a past date).
 - **Archiving** a tracker hides it from Today and Manage's active list.
-  Its entries remain and still count in history and goals.
+  Its entries remain and still count in history and goals. Trackers are never
+  deleted, and a tracker's `kind` can't change after creation.
+- **Refused with 409:** deleting an area that still has trackers (archived
+  included; the message names them) or goals; moving a tracker to another area
+  while a goal is scoped to it.
 
 ## 8. Testing
 
