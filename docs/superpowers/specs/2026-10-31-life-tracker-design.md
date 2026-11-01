@@ -96,7 +96,8 @@ An area can hold any mix of tracker kinds.
 - **Subject** is an optional free-text tag that groups trackers inside an area
   (for example *Chinese* and *C++* inside *Learning*). Adding one needs no
   setup: type it on the tracker. Grouping ignores case and surrounding spaces;
-  the heading uses the spelling of the group's lowest-id tracker. Empty means
+  the heading uses the spelling of the group's lowest-id tracker, archived ones
+  included. Empty means
   no subject. The same tag in two areas makes two separate groups.
 - **Minutes per unit** (quantity trackers only, positive) is how many minutes
   one unit is worth, so lessons, modules, or chapters can be converted into
@@ -122,7 +123,8 @@ An area can hold any mix of tracker kinds.
 - **Pages read on a date:** `page_reached` minus the previous `page_reached`
   for the same book (for a book's first log, minus its `start_page`: the page
   already reached before tracking began, so prior progress isn't counted as
-  reading on the first day).
+  reading on the first day). A downward correction counts as 0, never negative,
+  so pages re-logged after a correction count again.
 - **Goal progress:** calculated from `entries`, `books`, `reading_log`, and
   `goal_items`. Goals store only their rules.
 - **Streaks:** see section 4.
@@ -164,7 +166,8 @@ Example: *Read 20 books in 2026.*
     the number of items.
 - **Pace:** if `deadline` is set, the expected value today is
   `target × (days elapsed / total days)`, from the goal's creation date to the
-  deadline. The UI shows ahead or behind by the difference.
+  deadline. The UI shows ahead or behind by the difference, rounded to whole
+  units; the exact expected value is in the bar's tooltip.
 - **Visuals:** progress bar and pace line.
 
 ## 5. Screens
@@ -195,15 +198,19 @@ Example: *Read 20 books in 2026.*
    Ungrouped trackers and each subject section also get **Estimated total
    time** (hours, stacked by tracker) when any of their trackers has minutes
    per unit. Converted trackers are marked as estimates: lighter fill and
-   "(est.)" in the legend. A tracker keeps one colour across a section's
-   charts. Archived trackers still chart while they have data in the range.
-   Chart titles name the unit and bucket ("Minutes per week"). A subject
-   section with nothing in the range says so instead of showing empty charts.
+   "(est.)" in the legend, which estimated charts always show. A tracker keeps
+   one colour across a section's charts. Archived trackers still chart while
+   they have data in the range. Chart titles name the unit and bucket ("Minutes
+   per week"). A subject section lists days logged per check tracker, and with
+   nothing in the range says so instead of showing empty charts.
 3. **Books.** Books being read now (with progress bars and a page-update
    input), a finished shelf, a dropped list, adding books (optionally with the
    page already reached), editing a book's details, and changing status.
-4. **Manage.** Create, edit, and archive areas, trackers, goals, and checklist
-   items. Each tracker has a subject field (suggesting the subjects already
+4. **Manage.** Create and edit areas, trackers, goals, and checklist items.
+   Trackers are archived; areas, goals, and checklist items are deleted (areas
+   only when empty, section 7). A goal's title, target, target days, and
+   deadline can be edited; to change anything else, delete it and create a new
+   one. Each tracker has a subject field (suggesting the subjects already
    used in its area) and, for quantity trackers, a "≈ [ ] min each" field. That
    field shows when the unit isn't a minute unit, or when a value is already
    set, so it can still be cleared after a unit is renamed.
@@ -213,9 +220,11 @@ Example: *Read 20 books in 2026.*
 ```
 life-tracker/
 ├── shared/                  used by server and browser
+│   ├── books-area.ts        which area counts reading
 │   ├── dates.ts             date strings, week/month periods
+│   ├── enums.ts             allowed values for the database and request schemas
 │   ├── subjects.ts          subject grouping, minutes-per-unit rule
-│   ├── types.ts             row and API types
+│   ├── types.ts             row types (from the Drizzle schema) and API types
 │   └── schemas.ts           Zod input schemas
 ├── server/
 │   ├── db/                  Drizzle schema, client, seed, migrations (committed)
@@ -225,7 +234,7 @@ life-tracker/
 │   ├── app.ts               createApp(db, today)
 │   └── index.ts
 └── web/src/
-    ├── api.ts               typed fetch wrappers
+    ├── api.ts               client typed from the server's routes (Hono hc)
     ├── pages/               Today, Dashboard, Books, Manage
     └── components/          Heatmap, ProgressRing, PaceBar, TrendChart, …
 ```
@@ -243,17 +252,24 @@ plain values, so they can be tested without a database.
   `reading_log` follows the same rule per book per day.
 - **Validation (Zod), with errors shown next to the input:**
   - `rating` value must be an integer 1–5.
-  - `check` value must be 1. Unchecking deletes the entry.
+  - `check` value must be 1. Unchecking deletes the entry, as does clicking the
+    selected rating again or blanking a quantity.
   - `quantity` value must be ≥ 0.
   - `page_reached` must be between 0 and the book's `total_pages`.
-  - Goal fields must match the goal's `type` and `source`.
+  - Goal fields must match the goal's `type` and `source`, on create and on edit.
+    A checklist's target can't be set. A tracker goal needs a quantity tracker.
+    A new goal's deadline must be after today; an edited one, after the goal's
+    creation date.
   - `minutes_per_unit` is positive and finite, or null; a non-null value on a
     check or rating tracker is refused (400). An empty subject is stored as null.
   - A book's `start_page` is between 0 and `total_pages`, and `total_pages`
     can't drop below `start_page` or any logged `page_reached`.
+- **Blank fields:** blanking a page or a required number reverts it; it never
+  saves 0.
 - **Logging the last page:** setting `page_reached = total_pages` asks the user
   whether to mark the book `done`, with `finished` set to the date of that log
-  (not today, when logging a past date).
+  (not today, when logging a past date). The page and the status save in one
+  transaction; answering no still saves the page.
 - **Archiving** a tracker hides it from Today and Manage's active list.
   Its entries remain and still count in history and goals. Trackers are never
   deleted, and a tracker's `kind` can't change after creation.

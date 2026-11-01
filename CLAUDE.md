@@ -17,7 +17,7 @@ Single-user local app: Hono + Drizzle/SQLite server, React/Vite web. `docs/super
 - **`server/stats/` is pure** (plain arrays + `today` in, plain values out) and holds all calculation; routes validate, query, call stats, and return JSON. Compute over full history, then window to a range: pages-read deltas need each book's earlier logs.
 - **Test-first.** Route tests use `setup(today)` from `server/routes/testing.ts` (seeded in-memory DB, injected date). Run `npm test` and `npm run typecheck`; UI changes are verified by running the app.
 - **Errors** are JSON `{ error }` with 400 / 404 / 409. Request bodies are Zod schemas in `shared/schemas.ts`, shared with the web.
-- **The books area is the area named "Reading"** (`server/routes/books-area.ts`): books have no area link, so that's how reading days reach heatmaps and goals.
+- **The books area is the area named "Reading"** (`shared/books-area.ts`): books have no area link, so that's how reading days reach heatmaps and goals.
 - **Workflow:** a branch per change, fast-forwarded into `main` once the user agrees. The user pushes.
 
 ## User
