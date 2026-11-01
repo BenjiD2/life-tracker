@@ -81,3 +81,20 @@ describe('GET /api/dashboard?from=&to=', () => {
     expect((await req('GET', '/api/dashboard?from=2026-10-01')).status).toBe(400);
   });
 });
+
+describe('GET /api/dashboard trackerMinutes', () => {
+  type MinRow = { trackerId: number; periodStart: string; minutes: number };
+  const at = (d: { trackerMinutes: MinRow[] }, id: number, week: string) =>
+    d.trackerMinutes.find((r) => r.trackerId === id && r.periodStart === week)?.minutes;
+
+  it('counts minute trackers as-is and re-estimates history when minutes per unit changes', async () => {
+    const { req, trackerId } = await seeded();
+    const before = (await req('GET', '/api/dashboard')).body;
+    expect(at(before, trackerId('Tennis'), '2026-09-28')).toBe(60);
+    expect(before.trackerMinutes.some((r: MinRow) => r.trackerId === trackerId('Mood'))).toBe(false);
+
+    await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { minutesPerUnit: 2 });
+    const after = (await req('GET', '/api/dashboard')).body;
+    expect(at(after, trackerId('Tennis'), '2026-09-28')).toBe(120);
+  });
+});

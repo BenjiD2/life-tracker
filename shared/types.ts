@@ -112,6 +112,8 @@ export interface DashboardData {
   goals: GoalWithProgress[];
   /** Quantity trackers, one row per bucket overlapping the range, zero-filled. Only days inside the range count. */
   trackerTotals: { trackerId: number; periodStart: DateStr; total: number }[];
+  /** Time in minutes for trackers that count toward time (shared/subjects.ts `minutesFactor`), bucketed like `trackerTotals`. */
+  trackerMinutes: { trackerId: number; periodStart: DateStr; minutes: number }[];
   /** Rating entries within the range, ascending by date. */
   mood: { trackerId: number; date: DateStr; value: number }[];
   /** Pages read per bucket, zero-filled. */

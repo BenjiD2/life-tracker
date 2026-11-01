@@ -7,6 +7,7 @@ import { areas, books, entries, readingLog, trackers } from '../db/schema';
 import { bucketFor, bucketStarts } from '../stats/buckets';
 import { pagesReadByDate, readingDates } from '../stats/reading';
 import { activeDates } from '../stats/streaks';
+import { minutesPerBucket } from '../stats/time';
 import { isBooksArea } from './books-area';
 import { goalsWithProgress } from './goals';
 import { validate } from './http';
@@ -60,7 +61,8 @@ export function dashboardRoutes(db: Db, today: () => DateStr) {
     const pagesRead = starts.map((periodStart) => ({ periodStart, pages: pages.get(periodStart) ?? 0 }));
 
     const out: DashboardData = {
-      today: now, from, to, bucket, areas: areaRows, goals: goalsWithProgress(db, now), trackerTotals, mood, pagesRead,
+      today: now, from, to, bucket, areas: areaRows, goals: goalsWithProgress(db, now), trackerTotals,
+      trackerMinutes: minutesPerBucket(allTrackers, allEntries, from, to, bucket), mood, pagesRead,
     };
     return c.json(out);
   });
