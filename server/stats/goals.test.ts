@@ -56,6 +56,9 @@ describe('goalProgress: completion', () => {
   it('books: applies the topic filter', () => {
     expect(goalProgress({ ...g, bookTopic: 'history' }, { ...none, books }, '2026-07-02').current).toBe(0);
   });
+  it('books: topic match ignores case and surrounding spaces', () => {
+    expect(goalProgress({ ...g, bookTopic: ' CS ' }, { ...none, books }, '2026-07-02').current).toBe(1);
+  });
   it('tracker: sums entry values', () => {
     expect(goalProgress(completionGoal({ source: 'tracker', target: 500 }),
       { ...none, entries: [entry(120), entry(30)] }, '2026-10-15').current).toBe(150);

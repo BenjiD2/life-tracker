@@ -35,6 +35,36 @@ describe('areas', () => {
   });
 });
 
+describe('deleting an area whose trackers are archived', () => {
+  it('409 names the trackers, says they are archived, and does not suggest deleting them', async () => {
+    const { req } = setup();
+    const area = (await req('POST', '/api/areas', { name: 'Music', color: '#123456' })).body;
+    const t = (await req('POST', '/api/trackers', { areaId: area.id, name: 'Piano', kind: 'check' })).body;
+    await req('PATCH', `/api/trackers/${t.id}`, { archived: true });
+    const r = await req('DELETE', `/api/areas/${area.id}`);
+    expect(r.status).toBe(409);
+    expect(r.body.error).toContain('Piano (archived)');
+    expect(r.body.error).not.toContain('delete them');
+  });
+});
+
+describe('moving a tracker that a goal is scoped to', () => {
+  it('is refused (409) and names the goal', async () => {
+    const { req, trackerId } = setup();
+    const areas = (await req('GET', '/api/areas')).body;
+    const fitness = areas.find((a: { name: string }) => a.name === 'Fitness').id;
+    const habits = areas.find((a: { name: string }) => a.name === 'Habits').id;
+    await req('POST', '/api/goals', {
+      type: 'consistency', title: 'Tennis twice a week', areaId: fitness, period: 'week', targetDays: 2, scopeTrackerId: trackerId('Tennis'),
+    });
+    const r = await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { areaId: habits });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toContain('Tennis twice a week');
+    // moving an unscoped tracker still works
+    expect((await req('PATCH', `/api/trackers/${trackerId('Lifting')}`, { areaId: habits })).status).toBe(200);
+  });
+});
+
 describe('trackers', () => {
   it('POST creates a tracker; unknown area → 404; bad kind → 400', async () => {
     const { req } = setup();

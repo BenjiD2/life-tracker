@@ -40,6 +40,21 @@ describe('books', () => {
     expect((await req('PATCH', `/api/books/${book.id}`, { finished: '2026-10-10' })).status).toBe(400);
   });
 
+  it('PATCH edits title, author, topic, and total pages', async () => {
+    const { req, book } = await withBook(200);
+    expect((await req('PATCH', `/api/books/${book.id}`, { title: 'SICP 2e', author: 'A & S', topic: 'cs', totalPages: 657 })).body)
+      .toMatchObject({ title: 'SICP 2e', author: 'A & S', topic: 'cs', totalPages: 657 });
+  });
+
+  it('PATCH totalPages below a page already logged → 400', async () => {
+    const { req, book } = await withBook(200);
+    await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 150 });
+    const r = await req('PATCH', `/api/books/${book.id}`, { totalPages: 120 });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toContain('150');
+    expect((await req('PATCH', `/api/books/${book.id}`, { totalPages: 150 })).status).toBe(200);
+  });
+
   it('PATCH on a missing book → 404', async () => {
     const { req } = setup();
     expect((await req('PATCH', '/api/books/999', { title: 'x' })).status).toBe(404);

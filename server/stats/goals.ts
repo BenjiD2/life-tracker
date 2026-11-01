@@ -44,7 +44,7 @@ export function goalProgress(
           b.finished !== null &&
           b.finished >= goal.created &&
           (goal.deadline === null || b.finished <= goal.deadline) &&
-          (goal.bookTopic === null || b.topic === goal.bookTopic),
+          (goal.bookTopic === null || sameTopic(b.topic, goal.bookTopic)),
       ).length;
       break;
     case 'tracker':
@@ -64,6 +64,11 @@ export function goalProgress(
     streak: null,
     expected: goal.deadline === null ? null : expectedByToday(target, goal.created, goal.deadline, today),
   };
+}
+
+/** Topics are free text typed in two places, so 'CS' and ' cs' name the same topic. */
+function sameTopic(a: string | null, b: string): boolean {
+  return a !== null && a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 function percentOf(current: number, target: number): number {

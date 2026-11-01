@@ -24,8 +24,12 @@ export function catalogRoutes(db: Db) {
     .delete('/areas/:id', (c) => {
       const area = findArea(paramId(c));
       if (!area) return fail(c, 404, 'Area not found');
-      if (db.select({ id: trackers.id }).from(trackers).where(eq(trackers.areaId, area.id)).limit(1).get())
-        return fail(c, 409, `"${area.name}" still has trackers; move or delete them first`);
+      const own = db.select().from(trackers).where(eq(trackers.areaId, area.id)).all();
+      if (own.length > 0) {
+        // Trackers are never deleted (their history counts), so the way out is moving them.
+        const names = own.map((t) => (t.archived ? `${t.name} (archived)` : t.name)).join(', ');
+        return fail(c, 409, `"${area.name}" still has trackers: ${names}. Move them to another area first.`);
+      }
       if (db.select({ id: goals.id }).from(goals).where(eq(goals.areaId, area.id)).limit(1).get())
         return fail(c, 409, `"${area.name}" still has goals; delete them first`);
       db.delete(areas).where(eq(areas.id, area.id)).run();
@@ -44,7 +48,13 @@ export function catalogRoutes(db: Db) {
       const tracker = id === null ? undefined : db.select().from(trackers).where(eq(trackers.id, id)).get();
       if (!tracker) return fail(c, 404, 'Tracker not found');
       const patch = c.req.valid('json');
-      if (patch.areaId !== undefined && !findArea(patch.areaId)) return fail(c, 404, 'Area not found');
+      if (patch.areaId !== undefined && patch.areaId !== tracker.areaId) {
+        if (!findArea(patch.areaId)) return fail(c, 404, 'Area not found');
+        // A goal scoped to this tracker belongs to its current area; moving it would split the two.
+        const scoped = db.select().from(goals).where(eq(goals.scopeTrackerId, tracker.id)).all();
+        if (scoped.length > 0)
+          return fail(c, 409, `Goals scoped to ${tracker.name} would end up in a different area: ${scoped.map((g) => `"${g.title}"`).join(', ')}. Delete those goals first.`);
+      }
       if (Object.keys(patch).length === 0) return c.json(tracker);
       return c.json(db.update(trackers).set(patch).where(eq(trackers.id, tracker.id)).returning().get());
     });

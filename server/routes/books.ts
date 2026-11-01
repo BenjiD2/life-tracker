@@ -34,6 +34,10 @@ export function bookRoutes(db: Db, today: () => DateStr) {
       if (!book) return fail(c, 404, 'Book not found');
       const patch = c.req.valid('json');
       if (Object.keys(patch).length === 0) return c.json(book);
+      if (patch.totalPages !== undefined) {
+        const highest = Math.max(0, ...db.select().from(readingLog).where(eq(readingLog.bookId, book.id)).all().map((l) => l.pageReached));
+        if (patch.totalPages < highest) return fail(c, 400, `totalPages can't be below page ${highest}, which is already logged`);
+      }
       const done = (patch.status ?? book.status) === 'done';
       if (patch.finished !== undefined && !done) return fail(c, 400, 'finished can only be set on a book marked done');
       const finished = done ? (patch.finished ?? book.finished ?? today()) : null;

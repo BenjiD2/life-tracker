@@ -81,7 +81,6 @@ function AreasSection({ areas, refresh }: { areas: Area[]; refresh: () => Promis
 function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers: Tracker[]; refresh: () => Promise<unknown> }) {
   const { error, attempt } = useAttempt(refresh);
   const [form, setForm] = useState<{ areaId: string; name: string; kind: Kind; unit: string }>({ areaId: '', name: '', kind: 'check', unit: '' });
-  const areaName = (id: number) => areas.find((a) => a.id === id)?.name ?? '?';
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -152,7 +151,11 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
           <ul className="list">{archived.map((t) => (
             <li key={t.id} className="row">
               <span>{t.name}</span>
-              <span className="muted">{areaName(t.areaId)} · {t.kind}</span>
+              <select aria-label={`Area of ${t.name}`} value={t.areaId}
+                onChange={(e) => attempt(() => api.updateTracker(t.id, { areaId: Number(e.target.value) }))}>
+                {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              <span className="muted">{t.kind}</span>
               <button type="button" style={{ marginLeft: 'auto' }} onClick={() => attempt(() => api.updateTracker(t.id, { archived: false }))}>Unarchive</button>
             </li>
           ))}</ul>
@@ -223,7 +226,7 @@ function GoalsSection({ areas, trackers, goals, refresh }: {
       <form className="stack" onSubmit={submit} style={{ marginTop: '0.8rem' }}>
         <div className="row">
           <input type="text" aria-label="Goal title" placeholder="New goal title" value={f.title} onChange={(e) => set('title', e.target.value)} />
-          <select aria-label="Goal area" value={areaId} onChange={(e) => set('areaId', e.target.value)}>
+          <select aria-label="Goal area" value={areaId} onChange={(e) => setF((prev) => ({ ...prev, areaId: e.target.value, scopeTrackerId: '' }))}>
             {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <select aria-label="Goal type" value={f.type} onChange={(e) => set('type', e.target.value as GoalForm['type'])}>

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { todayLocal } from '../../../shared/dates';
+import type { BookPatch } from '../../../shared/schemas';
 import type { BookStatus, BookWithPage } from '../../../shared/types';
 import * as api from '../api';
 import { InlineText } from '../components/InlineText';
@@ -27,6 +28,17 @@ export function Books() {
   const done = books.filter((b) => b.status === 'done').sort((a, b) => (b.finished ?? '').localeCompare(a.finished ?? ''));
   const dropped = books.filter((b) => b.status === 'dropped');
 
+  const [editing, setEditing] = useState<number | null>(null);
+  const editButton = (b: BookWithPage) => (
+    <button type="button" className="link" onClick={() => setEditing(editing === b.id ? null : b.id)}>
+      {editing === b.id ? 'Done editing' : 'Edit'}
+    </button>
+  );
+  const editor = (b: BookWithPage) =>
+    editing === b.id && (
+      <BookEditor book={b} save={(patch) => attempt(b.id, () => api.updateBook(b.id, patch))} error={rowErrors[b.id]} />
+    );
+
   const statusSelect = (b: BookWithPage) => (
     <select
       aria-label={`Status of ${b.title}`}
@@ -52,8 +64,9 @@ export function Books() {
               <div className="row">
                 <strong>{b.title}</strong>
                 <span className="muted">{b.author}{b.topic ? ` · ${b.topic}` : ''}</span>
-                <span style={{ marginLeft: 'auto' }}>{statusSelect(b)}</span>
+                <span style={{ marginLeft: 'auto' }}>{editButton(b)} {statusSelect(b)}</span>
               </div>
+              {editor(b)}
               <span className="bar" title={`${b.currentPage} / ${b.totalPages}`}>
                 <span style={{ width: `${(b.currentPage / b.totalPages) * 100}%`, background: 'var(--accent)' }} />
               </span>
@@ -68,7 +81,7 @@ export function Books() {
                 />
                 <span className="muted">of {b.totalPages} ({Math.round((b.currentPage / b.totalPages) * 100)}%)</span>
               </div>
-              {rowErrors[b.id] && <div className="field-error" style={{ gridColumn: 'auto' }}>{rowErrors[b.id]}</div>}
+              {editing !== b.id && rowErrors[b.id] && <div className="field-error" style={{ gridColumn: 'auto' }}>{rowErrors[b.id]}</div>}
             </li>
           ))}
         </ul>
@@ -79,11 +92,15 @@ export function Books() {
         {done.length === 0 && <p className="muted">No finished books yet.</p>}
         <ul className="list">
           {done.map((b) => (
-            <li key={b.id} className="row">
-              <strong>{b.title}</strong>
-              <span className="muted">{b.author}{b.topic ? ` · ${b.topic}` : ''}</span>
-              <span className="muted" style={{ marginLeft: 'auto' }}>{b.finished ? formatDay(b.finished) : ''}</span>
-              {statusSelect(b)}
+            <li key={b.id} className="stack">
+              <div className="row">
+                <strong>{b.title}</strong>
+                <span className="muted">{b.author}{b.topic ? ` · ${b.topic}` : ''}</span>
+                <span className="muted" style={{ marginLeft: 'auto' }}>{b.finished ? formatDay(b.finished) : ''}</span>
+                {editButton(b)}
+                {statusSelect(b)}
+              </div>
+              {editor(b)}
             </li>
           ))}
         </ul>
@@ -94,10 +111,13 @@ export function Books() {
           <h2>Dropped</h2>
           <ul className="list">
             {dropped.map((b) => (
-              <li key={b.id} className="row">
-                <span>{b.title}</span>
-                <span className="muted">{b.author}</span>
-                <span style={{ marginLeft: 'auto' }}>{statusSelect(b)}</span>
+              <li key={b.id} className="stack">
+                <div className="row">
+                  <span>{b.title}</span>
+                  <span className="muted">{b.author}</span>
+                  <span style={{ marginLeft: 'auto' }}>{editButton(b)} {statusSelect(b)}</span>
+                </div>
+                {editor(b)}
               </li>
             ))}
           </ul>
@@ -138,5 +158,28 @@ function AddBook({ onAdded }: { onAdded: () => void }) {
       </form>
       {error && <div className="field-error">{error}</div>}
     </section>
+  );
+}
+
+/** Inline fields for a book's details; each saves on blur. Errors (e.g. pages below a logged page) show underneath. */
+function BookEditor({ book, save, error }: { book: BookWithPage; save: (patch: BookPatch) => void; error?: string }) {
+  return (
+    <div className="stack" style={{ padding: '0.4rem 0 0.2rem' }}>
+      <div className="row">
+        <label className="row muted">Title
+          <InlineText label="Title" value={book.title} onSave={(v) => save({ title: v })} />
+        </label>
+        <label className="row muted">Author
+          <InlineText label="Author" value={book.author} onSave={(v) => save({ author: v })} />
+        </label>
+        <label className="row muted">Pages
+          <InlineText type="number" width="6rem" label="Total pages" value={String(book.totalPages)} onSave={(v) => save({ totalPages: Number(v) })} />
+        </label>
+        <label className="row muted">Topic
+          <InlineText label="Topic" width="8rem" placeholder="none" value={book.topic ?? ''} onSave={(v) => save({ topic: v.trim() || null })} />
+        </label>
+      </div>
+      {error && <div className="field-error" style={{ gridColumn: 'auto' }}>{error}</div>}
+    </div>
   );
 }
