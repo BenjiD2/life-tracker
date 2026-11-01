@@ -138,7 +138,10 @@ takes the full tracker list and returns the new order of all tracker ids
 
 - Subject sections and the series within each chart follow the saved order.
   Colours are assigned by tracker order (subjects spec §5), so **reordering
-  changes a tracker's colour**. This is accepted.
+  changes a tracker's colour**. This is accepted (user's call, 2026-11-01).
+  Possible later change, kept out of this one: a colour saved on each tracker
+  (auto-picked from a larger palette at creation, optionally editable in
+  Manage) so reordering never changes it.
 - The "Estimated time by subject" stacks follow subject order, with the
   "No subject" stack still last: it is a remainder, so it sits on top of the
   stack, as now. *(Builder-check call.)*
