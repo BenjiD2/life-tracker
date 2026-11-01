@@ -244,8 +244,8 @@ Example: *Read 20 books in 2026.*
    trackers are grouped by subject like Today, with ↑ / ↓ on each tracker
    (move within its group) and on each subject heading (move the subject); a
    button that can't move is disabled, and all of them are while a move saves.
-   One click is one step and saves straight away. The archived list is
-   unordered.
+   One click is one step and saves straight away. The archived list follows
+   the saved order but has no move buttons.
 
 ## 6. Code organization
 

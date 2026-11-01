@@ -15,6 +15,7 @@ export const areaPatch = areaInput.partial().strict();
 // Empty or whitespace means no subject, so clearing the field in the UI stores null.
 const subject = z.string().trim().transform((s) => s || null).nullable();
 const minutesPerUnit = z.number().finite().positive('must be more than 0').nullable();
+// .strict(): `position` is set by the server, so sending it is an error rather than silently ignored.
 export const trackerInput = z.object({
   areaId: id,
   name,
@@ -22,7 +23,7 @@ export const trackerInput = z.object({
   unit: z.string().trim().min(1).nullish(),
   subject: subject.optional(),
   minutesPerUnit: minutesPerUnit.optional(),
-}).strict(); // so `position` (set by the server) is refused rather than ignored
+}).strict();
 // .strict(): `kind` is immutable after creation, so sending it is an error rather than silently ignored.
 export const trackerPatch = z
   .object({ name, unit: z.string().trim().min(1).nullable(), archived: z.boolean(), areaId: id, subject, minutesPerUnit })
