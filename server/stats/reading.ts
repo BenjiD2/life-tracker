@@ -1,4 +1,6 @@
-import type { DateStr } from '../../shared/types';
+import { periodBounds } from '../../shared/dates';
+import type { DateStr, Period } from '../../shared/types';
+import { bucketStarts } from './buckets';
 
 /**
  * Pages read on each date: for every book, its page position minus the previous
@@ -33,4 +35,30 @@ export function readingDates(
   const out = new Set<DateStr>();
   for (const [date, pages] of pagesReadByDate(logs, startPages)) if (pages > 0) out.add(date);
   return out;
+}
+
+/** Pages read per bucket overlapping [from, to], zero-filled; only days inside the range count. */
+export function pagesPerBucket(
+  pagesByDate: ReadonlyMap<DateStr, number>,
+  from: DateStr,
+  to: DateStr,
+  bucket: Period,
+): { periodStart: DateStr; pages: number }[] {
+  const sums = new Map<DateStr, number>();
+  for (const [date, pages] of pagesByDate) {
+    if (date < from || date > to) continue;
+    const start = periodBounds(date, bucket).start;
+    sums.set(start, (sums.get(start) ?? 0) + pages);
+  }
+  return bucketStarts(from, to, bucket).map((periodStart) => ({ periodStart, pages: sums.get(periodStart) ?? 0 }));
+}
+
+/** Each logged book's page position on its latest logged date. */
+export function latestPages(logs: { bookId: number; date: DateStr; pageReached: number }[]): Map<number, number> {
+  const latest = new Map<number, { date: DateStr; page: number }>();
+  for (const log of logs) {
+    const held = latest.get(log.bookId);
+    if (!held || log.date > held.date) latest.set(log.bookId, { date: log.date, page: log.pageReached });
+  }
+  return new Map([...latest].map(([bookId, { page }]) => [bookId, page]));
 }

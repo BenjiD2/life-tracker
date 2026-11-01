@@ -21,12 +21,13 @@ async function seeded() {
   return s;
 }
 
-describe('GET /api/dashboard (default range: last 12 weeks)', () => {
+describe('GET /api/dashboard (12 weeks)', () => {
   it('aggregates active days, weekly totals, mood, and pages per week', async () => {
     const { req, trackerId } = await seeded();
-    const d = (await req('GET', '/api/dashboard')).body;
+    const d = (await req('GET', '/api/dashboard?from=2026-07-27&to=2026-10-15')).body;
     expect(d).toMatchObject({ today: '2026-10-15', from: '2026-07-27', to: '2026-10-15', bucket: 'week' });
     expect(area(d, 'Fitness')).toEqual(['2026-10-01', '2026-10-02']); // June is outside the range
+    expect(d.trackers.map((t: { name: string }) => t.name)).toContain('Tennis');
     expect(area(d, 'Habits')).toEqual([]);
     // Reading has no trackers: its active days are days with pages read (a downward correction isn't reading)
     expect(area(d, 'Reading')).toEqual(['2026-10-05', '2026-10-13']);
@@ -74,11 +75,12 @@ describe('GET /api/dashboard?from=&to=', () => {
     expect(d.pagesRead).toEqual([{ periodStart: '2026-10-12', pages: 60 }]); // 100 − 40, not 100 − 0
   });
 
-  it('rejects a bad date, from after to, or only one bound (400)', async () => {
+  it('rejects a bad date, from after to, one bound, or no range (400)', async () => {
     const { req } = await seeded();
     expect((await req('GET', '/api/dashboard?from=2026-02-30&to=2026-10-15')).status).toBe(400);
     expect((await req('GET', '/api/dashboard?from=2026-10-15&to=2026-10-01')).status).toBe(400);
     expect((await req('GET', '/api/dashboard?from=2026-10-01')).status).toBe(400);
+    expect((await req('GET', '/api/dashboard')).status).toBe(400);
   });
 });
 
@@ -89,12 +91,22 @@ describe('GET /api/dashboard trackerMinutes', () => {
 
   it('counts minute trackers as-is and re-estimates history when minutes per unit changes', async () => {
     const { req, trackerId } = await seeded();
-    const before = (await req('GET', '/api/dashboard')).body;
+    const before = (await req('GET', '/api/dashboard?from=2026-07-27&to=2026-10-15')).body;
     expect(at(before, trackerId('Tennis'), '2026-09-28')).toBe(60);
     expect(before.trackerMinutes.some((r: MinRow) => r.trackerId === trackerId('Mood'))).toBe(false);
 
     await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { minutesPerUnit: 2 });
-    const after = (await req('GET', '/api/dashboard')).body;
+    const after = (await req('GET', '/api/dashboard?from=2026-07-27&to=2026-10-15')).body;
     expect(at(after, trackerId('Tennis'), '2026-09-28')).toBe(120);
+  });
+});
+
+describe('GET /api/dashboard checkDays', () => {
+  it('counts days per check tracker inside the range', async () => {
+    const { req } = setup('2026-10-15');
+    const t = (await req('POST', '/api/trackers', { areaId: 2, name: 'Meditate', kind: 'check' })).body;
+    for (const date of ['2026-06-01', '2026-10-01', '2026-10-02']) await req('PUT', '/api/entries', { trackerId: t.id, date, value: 1 });
+    const d = (await req('GET', '/api/dashboard?from=2026-09-01&to=2026-10-15')).body;
+    expect(d.checkDays).toEqual([{ trackerId: t.id, days: 2 }]);
   });
 });

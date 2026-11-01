@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, daysBetween, isDateStr, periodBounds, todayLocal } from './dates';
+import { addDays, daysBetween, formatDate, isDateStr, localTimestamp, periodBounds, todayLocal } from './dates';
 
 describe('todayLocal', () => {
   it('uses local time, not UTC', () => {
@@ -38,4 +38,14 @@ describe('periodBounds', () => {
     expect(periodBounds('2026-04-30', 'month')).toEqual({ start: '2026-04-01', end: '2026-04-30' });
     expect(periodBounds('2026-12-05', 'month')).toEqual({ start: '2026-12-01', end: '2026-12-31' });
   });
+});
+
+describe('formatDate', () => {
+  it('names the calendar date in the string, whatever the local time zone', () =>
+    expect(formatDate('2026-01-01', { year: 'numeric' })).toContain('2026'));
+});
+
+describe('localTimestamp', () => {
+  it('is local date, hours, and minutes', () =>
+    expect(localTimestamp(new Date(2026, 2, 5, 7, 9))).toBe('2026-03-05-0709'));
 });

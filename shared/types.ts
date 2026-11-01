@@ -92,12 +92,6 @@ export interface GoalProgress {
 }
 
 export type BookWithPage = Book & { currentPage: number };
-export interface ReadingLogResult {
-  row: ReadingLogRow;
-  /** The log reached the book's last page; the UI offers to mark it done. */
-  reachedEnd: boolean;
-}
-
 export type GoalWithProgress = Goal & { items: GoalItem[]; progress: GoalProgress };
 
 /** Everything on the dashboard for the range [from, to]. Goals always show their current progress. */
@@ -107,6 +101,8 @@ export interface DashboardData {
   to: DateStr;
   /** Bar size for totals: weeks for ranges up to ~26 weeks, months beyond. */
   bucket: Period;
+  /** Every tracker, archived included: they still chart while they have data in the range. */
+  trackers: Tracker[];
   /** Active dates within the range, ascending. */
   areas: { area: Area; activeDates: DateStr[] }[];
   goals: GoalWithProgress[];
@@ -114,6 +110,8 @@ export interface DashboardData {
   trackerTotals: { trackerId: number; periodStart: DateStr; total: number }[];
   /** Time in minutes for trackers that count toward time (shared/subjects.ts `minutesFactor`), bucketed like `trackerTotals`. */
   trackerMinutes: { trackerId: number; periodStart: DateStr; minutes: number }[];
+  /** Days logged per check tracker within the range; trackers with none are left out. */
+  checkDays: { trackerId: number; days: number }[];
   /** Rating entries within the range, ascending by date. */
   mood: { trackerId: number; date: DateStr; value: number }[];
   /** Pages read per bucket, zero-filled. */

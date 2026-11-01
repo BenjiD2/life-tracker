@@ -115,3 +115,60 @@ describe('checklist goals', () => {
     expect((await req('POST', `/api/goals/${g.id}/items`, { label: 'x' })).status).toBe(400);
   });
 });
+
+describe('PATCH /api/goals validation', () => {
+  it('a target below 1 → 400', async () => {
+    const { req, areaId } = await fitness();
+    const g = (await req('POST', '/api/goals', { type: 'completion', title: 'b', areaId, source: 'books', target: 5 })).body;
+    const r = await req('PATCH', `/api/goals/${g.id}`, { target: 0 });
+    expect(r.status).toBe(400);
+    expect(typeof r.body.error).toBe('string');
+  });
+
+  it('fields of the other goal type → 400, and nothing is stored', async () => {
+    const { req, db, areaId } = await fitness();
+    const { goals } = await import('../db/schema');
+    const stored = (id: number) => db.select().from(goals).all().find((g) => g.id === id)!;
+
+    const consistency = (await req('POST', '/api/goals', { type: 'consistency', title: 'c', areaId, period: 'week', targetDays: 3 })).body;
+    expect((await req('PATCH', `/api/goals/${consistency.id}`, { target: 5 })).status).toBe(400);
+    expect((await req('PATCH', `/api/goals/${consistency.id}`, { deadline: '2030-01-01' })).status).toBe(400);
+    expect(stored(consistency.id)).toMatchObject({ target: null, deadline: null });
+
+    const completion = (await req('POST', '/api/goals', { type: 'completion', title: 'b', areaId, source: 'books', target: 5 })).body;
+    expect((await req('PATCH', `/api/goals/${completion.id}`, { targetDays: 3 })).status).toBe(400);
+    expect(stored(completion.id).targetDays).toBeNull();
+  });
+
+  it("a checklist's target is its item count, so it can't be set; its deadline can", async () => {
+    const { req, areaId } = await fitness();
+    const g = (await req('POST', '/api/goals', { type: 'completion', title: 'l', areaId, source: 'checklist' })).body;
+    expect((await req('PATCH', `/api/goals/${g.id}`, { target: 5 })).status).toBe(400);
+    expect((await req('PATCH', `/api/goals/${g.id}`, { deadline: '2030-01-01' })).status).toBe(200);
+  });
+});
+
+describe('POST /api/goals input shape', () => {
+  it('a tracker goal without a tracker says so', async () => {
+    const { req, areaId } = await fitness();
+    const r = await req('POST', '/api/goals', { type: 'completion', title: 'x', areaId, source: 'tracker', target: 5 });
+    expect(r).toMatchObject({ status: 400, body: { error: 'sourceTrackerId is required for a tracker goal' } });
+  });
+
+  it('a books goal without a target says so', async () => {
+    const { req, areaId } = await fitness();
+    const r = await req('POST', '/api/goals', { type: 'completion', title: 'x', areaId, source: 'books' });
+    expect(r).toMatchObject({ status: 400, body: { error: 'target is required' } });
+  });
+});
+
+describe('PATCH /api/goal-items validation', () => {
+  it('an empty label → 400', async () => {
+    const { req, areaId } = await fitness();
+    const g = (await req('POST', '/api/goals', { type: 'completion', title: 'l', areaId, source: 'checklist' })).body;
+    const item = (await req('POST', `/api/goals/${g.id}/items`, { label: 'a' })).body;
+    const r = await req('PATCH', `/api/goal-items/${item.id}`, { label: ' ' });
+    expect(r.status).toBe(400);
+    expect(typeof r.body.error).toBe('string');
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeDates, countInRange, periodStreak } from './streaks';
+import { activeDates, countInRange, datesInRange, periodStreak } from './streaks';
 
 describe('activeDates', () => {
   it('counts a day once when several trackers logged it, and ignores other trackers', () => {
@@ -48,4 +48,17 @@ describe('periodStreak', () => {
     // today is Sunday 2026-11-01; weeks 10-19..10-25 and 10-26..11-01 are each met
     expect(periodStreak(new Set(['2026-10-20', '2026-10-26']), 'week', 1, '2026-11-01')).toBe(2);
   });
+});
+
+describe('activeDates: extra dates', () => {
+  it('adds dates active for another reason, once each', () => {
+    const dates = activeDates([{ trackerId: 1, date: '2026-10-01', value: 1 }], new Set([1]), new Set(['2026-10-01', '2026-10-02']));
+    expect([...dates].sort()).toEqual(['2026-10-01', '2026-10-02']);
+  });
+});
+
+describe('datesInRange', () => {
+  it('keeps dates inside the range, ascending', () =>
+    expect(datesInRange(new Set(['2026-10-09', '2026-10-01', '2026-09-30', '2026-10-05']), '2026-10-01', '2026-10-05'))
+      .toEqual(['2026-10-01', '2026-10-05']));
 });

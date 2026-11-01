@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { bookInput, bookPatch, readingLogInput } from '../../shared/schemas';
-import type { BookWithPage, DateStr, ReadingLogResult } from '../../shared/types';
+import type { BookWithPage, DateStr } from '../../shared/types';
 import type { Db } from '../db/client';
 import { books, readingLog } from '../db/schema';
+import { latestPages } from '../stats/reading';
 import { fail, paramId, validate } from './http';
 
 export function bookRoutes(db: Db, today: () => DateStr) {
@@ -11,13 +12,8 @@ export function bookRoutes(db: Db, today: () => DateStr) {
 
   return new Hono()
     .get('/books', (c) => {
-      // Latest page position per book: the log row with the greatest date.
-      const latest = new Map<number, { date: DateStr; page: number }>();
-      for (const log of db.select().from(readingLog).all()) {
-        const prev = latest.get(log.bookId);
-        if (!prev || log.date > prev.date) latest.set(log.bookId, { date: log.date, page: log.pageReached });
-      }
-      const out: BookWithPage[] = db.select().from(books).all().map((b) => ({ ...b, currentPage: latest.get(b.id)?.page ?? b.startPage }));
+      const latest = latestPages(db.select().from(readingLog).all());
+      const out: BookWithPage[] = db.select().from(books).all().map((b) => ({ ...b, currentPage: latest.get(b.id) ?? b.startPage }));
       return c.json(out);
     })
     .post('/books', validate('json', bookInput), (c) => {
@@ -47,18 +43,20 @@ export function bookRoutes(db: Db, today: () => DateStr) {
       return c.json(db.update(books).set({ ...patch, finished }).where(eq(books.id, book.id)).returning().get());
     })
     .put('/reading-log', validate('json', readingLogInput), (c) => {
-      const input = c.req.valid('json');
-      const book = findBook(input.bookId);
+      const { finish, ...log } = c.req.valid('json');
+      const book = findBook(log.bookId);
       if (!book) return fail(c, 404, 'Book not found');
-      if (input.pageReached > book.totalPages)
-        return fail(c, 400, `pageReached must be between 0 and ${book.totalPages}`);
-      const row = db
-        .insert(readingLog)
-        .values(input)
-        .onConflictDoUpdate({ target: [readingLog.bookId, readingLog.date], set: { pageReached: input.pageReached } })
-        .returning()
-        .get();
-      const out: ReadingLogResult = { row, reachedEnd: input.pageReached === book.totalPages };
-      return c.json(out);
+      if (log.pageReached > book.totalPages) return fail(c, 400, `pageReached must be between 0 and ${book.totalPages}`);
+      if (finish && log.pageReached !== book.totalPages) return fail(c, 400, 'finish only applies on the last page');
+      const row = db.transaction((tx) => {
+        if (finish) tx.update(books).set({ status: 'done', finished: log.date }).where(eq(books.id, book.id)).run();
+        return tx
+          .insert(readingLog)
+          .values(log)
+          .onConflictDoUpdate({ target: [readingLog.bookId, readingLog.date], set: { pageReached: log.pageReached } })
+          .returning()
+          .get();
+      });
+      return c.json(row);
     });
 }

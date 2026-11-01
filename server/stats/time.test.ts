@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { totalsPerBucket } from './dashboard';
 import { minutesPerBucket } from './time';
 
 const q = (id: number, unit: string, minutesPerUnit: number | null) => ({ id, kind: 'quantity' as const, unit, minutesPerUnit });
@@ -17,7 +18,7 @@ const entries = [
 ];
 
 describe('minutesPerBucket', () => {
-  const rows = minutesPerBucket([A, B, C, D], entries, '2026-10-01', '2026-10-15', 'week');
+  const rows = minutesPerBucket([A, B, C, D], totalsPerBucket([A, B, C, D], entries, '2026-10-01', '2026-10-15', 'week'));
   const of = (id: number) => rows.filter((r) => r.trackerId === id).map((r) => [r.periodStart, r.minutes]);
 
   it('minute units count as-is; only days inside the range count', () =>

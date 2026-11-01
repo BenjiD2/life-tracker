@@ -42,6 +42,11 @@ describe('groupBySubject', () => {
     ]);
   });
   it('no trackers → no groups', () => expect(groupBySubject([])).toEqual([]));
+  it('the label can come from a tracker that is not shown, such as an archived one', () => {
+    const shown = [{ id: 2, subject: 'Chinese' }];
+    const [group] = groupBySubject(shown, [{ id: 1, subject: 'CHINESE' }, ...shown]);
+    expect(group).toMatchObject({ key: 'chinese', label: 'CHINESE', trackers: shown });
+  });
 });
 
 describe('minutesBySubject', () => {

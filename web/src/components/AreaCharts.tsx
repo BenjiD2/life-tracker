@@ -13,6 +13,8 @@ export interface BarSpec {
   series: Series[];
   unit?: string;
   decimals?: boolean;
+  /** Show the legend even for one series, when it says something the title doesn't. */
+  legend?: boolean;
 }
 
 const ESTIMATED_OPACITY = 0.55;
@@ -32,7 +34,8 @@ export function visibleTrackers(trackers: Tracker[], data: DashboardData): Track
   return trackers.filter(
     (t) => !t.archived
       || data.trackerTotals.some((w) => w.trackerId === t.id && w.total > 0)
-      || data.mood.some((m) => m.trackerId === t.id),
+      || data.mood.some((m) => m.trackerId === t.id)
+      || data.checkDays.some((c) => c.trackerId === t.id),
   );
 }
 
@@ -66,6 +69,7 @@ export function quantityCharts(trackers: Tracker[], data: DashboardData): BarSpe
       title: `Estimated total time per ${data.bucket} (hours)`,
       unit: 'h',
       decimals: true,
+      legend: true, // it carries the "(est.)" marker, even for one tracker
       series: timed.map((t) => {
         const estimated = t.minutesPerUnit !== null;
         return {
@@ -101,7 +105,7 @@ export function BarCharts({ specs, data }: { specs: BarSpec[]; data: DashboardDa
   return specs.map((s) => (
     <div key={s.title}>
       <div className="chart-title">{s.title}</div>
-      <TrendChart kind="bar" data={s.rows} series={s.series} unit={s.unit} decimals={s.decimals}
+      <TrendChart kind="bar" data={s.rows} series={s.series} unit={s.unit} decimals={s.decimals} legend={s.legend}
         xFormat={data.bucket === 'week' ? formatShort : formatMonth} />
     </div>
   ));

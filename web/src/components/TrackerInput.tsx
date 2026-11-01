@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import type { Entry, Tracker } from '../../../shared/types';
+import { InlineText } from './InlineText';
 
 interface Props {
   tracker: Tracker;
@@ -48,28 +48,16 @@ export function TrackerInput({ tracker, entry, onSave, onClear, error }: Props) 
 }
 
 function QuantityField({ id, tracker, entry, onSave, onClear }: Omit<Props, 'error'> & { id: string }) {
-  const saved = entry === undefined ? '' : String(entry.value);
-  const [draft, setDraft] = useState(saved);
-  useEffect(() => setDraft(saved), [saved]);
-
-  function commit() {
-    const text = draft.trim();
-    if (text === saved) return;
-    if (text === '') onClear();
-    else onSave(Number(text), entry?.note ?? null);
-  }
-
   return (
     <span className="quantity">
-      <input
+      <InlineText
         id={id}
         type="number"
-        inputMode="decimal"
-        value={draft}
+        label={tracker.name}
         placeholder="0"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        value={entry === undefined ? '' : String(entry.value)}
+        // Blanking the field clears the day's entry.
+        onSave={(v) => (v.trim() === '' ? onClear() : onSave(Number(v), entry?.note ?? null))}
       />
       {tracker.unit && <span className="unit">{tracker.unit}</span>}
     </span>

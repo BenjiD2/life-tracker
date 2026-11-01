@@ -1,4 +1,4 @@
-import type { Area } from '../../shared/types';
+import type { Area } from './types';
 
 /**
  * Books aren't linked to an area in the schema, so the area named "Reading" (the seeded one,

@@ -1,63 +1,25 @@
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { goalInput, goalItemInput, goalItemPatch, goalPatch } from '../../shared/schemas';
-import type { DateStr, Goal, GoalWithProgress } from '../../shared/types';
+import { goalInput, goalItemInput, goalItemPatch, goalPatch, type GoalPatch } from '../../shared/schemas';
+import type { DateStr, Goal } from '../../shared/types';
 import type { Db } from '../db/client';
-import { areas, books, entries, goalItems, goals, readingLog, trackers } from '../db/schema';
-import { readingDates } from '../stats/reading';
-import { isBooksArea } from './books-area';
-import { goalProgress } from '../stats/goals';
-import { activeDates } from '../stats/streaks';
+import { areas, goalItems, goals, trackers } from '../db/schema';
+import { goalsWithProgress } from './goal-progress';
 import { fail, paramId, validate } from './http';
 
-/**
- * Every goal (or just `onlyId`) with its items and calculated progress.
- * Loads each table once and filters per goal; all math lives in stats/.
- */
-export function goalsWithProgress(db: Db, today: DateStr, onlyId?: number): GoalWithProgress[] {
-  const goalRows = onlyId === undefined ? db.select().from(goals).all() : db.select().from(goals).where(eq(goals.id, onlyId)).all();
-  if (goalRows.length === 0) return [];
-  const allTrackers = db.select().from(trackers).all(); // archived included: their history still counts
-  const allEntries = db.select().from(entries).all();
-  const allBooks = db.select().from(books).all();
-  const allItems = db.select().from(goalItems).all();
-  const booksAreaIds = new Set(db.select().from(areas).all().filter(isBooksArea).map((a) => a.id));
-  const readDays =
-    booksAreaIds.size > 0
-      ? readingDates(db.select().from(readingLog).all(), new Map(allBooks.map((b) => [b.id, b.startPage])))
-      : new Set<DateStr>();
-
-  return goalRows.map((goal) => {
-    const items = allItems.filter((i) => i.goalId === goal.id);
-    const scope = new Set(
-      goal.scopeTrackerId !== null
-        ? [goal.scopeTrackerId]
-        : allTrackers.filter((t) => t.areaId === goal.areaId).map((t) => t.id),
-    );
-    let goalDates = new Set<DateStr>();
-    if (goal.type === 'consistency') {
-      goalDates = activeDates(allEntries, scope);
-      // An area-wide goal on the books area also counts reading days.
-      if (goal.scopeTrackerId === null && booksAreaIds.has(goal.areaId)) for (const d of readDays) goalDates.add(d);
-    }
-    const progress = goalProgress(
-      goal,
-      {
-        activeDates: goalDates,
-        books: allBooks,
-        entries: goal.sourceTrackerId === null ? [] : allEntries.filter((e) => e.trackerId === goal.sourceTrackerId),
-        items,
-      },
-      today,
-    );
-    return { ...goal, items, progress };
-  });
+/** Why a patch doesn't fit this goal's type and source (spec §3), or null if it does. */
+function patchError(goal: Goal, patch: GoalPatch): string | null {
+  if (goal.type === 'consistency' && (patch.target !== undefined || patch.deadline !== undefined))
+    return 'target and deadline only apply to completion goals';
+  if (goal.type === 'completion' && patch.targetDays !== undefined) return 'targetDays only applies to consistency goals';
+  if (goal.source === 'checklist' && patch.target !== undefined) return "A checklist's target is its item count";
+  return null;
 }
 
 export function goalRoutes(db: Db, today: () => DateStr) {
   const findGoal = (id: number | null) => (id === null ? undefined : db.select().from(goals).where(eq(goals.id, id)).get());
   const findTracker = (id: number) => db.select().from(trackers).where(eq(trackers.id, id)).get();
-  const one = (id: number) => goalsWithProgress(db, today(), id)[0];
+  const withProgress = (id: number) => goalsWithProgress(db, today(), id)[0];
 
   return new Hono()
     .get('/goals', (c) => c.json(goalsWithProgress(db, today())))
@@ -80,30 +42,32 @@ export function goalRoutes(db: Db, today: () => DateStr) {
       } else {
         if (input.deadline != null && input.deadline <= created) return fail(c, 400, 'deadline must be after today');
         if (input.source === 'tracker') {
-          const t = findTracker(input.sourceTrackerId!);
+          const t = findTracker(input.sourceTrackerId);
           if (!t || t.kind !== 'quantity') return fail(c, 400, 'sourceTrackerId must be a quantity tracker');
         }
         row = {
           title: input.title, areaId: input.areaId, type: 'completion', created,
           period: null, targetDays: null, scopeTrackerId: null,
           source: input.source,
-          target: input.source === 'checklist' ? null : input.target!,
+          target: input.source === 'checklist' ? null : input.target,
           deadline: input.deadline ?? null,
-          sourceTrackerId: input.source === 'tracker' ? input.sourceTrackerId! : null,
+          sourceTrackerId: input.source === 'tracker' ? input.sourceTrackerId : null,
           bookTopic: input.source === 'books' ? (input.bookTopic ?? null) : null,
         };
       }
       const { id } = db.insert(goals).values(row).returning({ id: goals.id }).get();
-      return c.json(one(id), 201);
+      return c.json(withProgress(id), 201);
     })
     .patch('/goals/:id', validate('json', goalPatch), (c) => {
       const goal = findGoal(paramId(c));
       if (!goal) return fail(c, 404, 'Goal not found');
       const patch = c.req.valid('json');
+      const error = patchError(goal, patch);
+      if (error) return fail(c, 400, error);
       if (patch.deadline != null && patch.deadline <= goal.created)
         return fail(c, 400, 'deadline must be after the goal was created');
       if (Object.keys(patch).length > 0) db.update(goals).set(patch).where(eq(goals.id, goal.id)).run();
-      return c.json(one(goal.id));
+      return c.json(withProgress(goal.id));
     })
     .delete('/goals/:id', (c) => {
       const goal = findGoal(paramId(c));

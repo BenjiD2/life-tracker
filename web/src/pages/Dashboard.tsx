@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { isBooksArea } from '../../../shared/books-area';
 import { isDateStr, todayLocal } from '../../../shared/dates';
 import { groupBySubject } from '../../../shared/subjects';
 import type { Area, DashboardData, DateStr, GoalWithProgress, Tracker } from '../../../shared/types';
@@ -34,10 +35,8 @@ function useRange() {
 export function Dashboard() {
   const { today, key, range, setPreset, setCustom } = useRange();
   const [data, setData] = useState<DashboardData | null>(null);
-  const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { api.getTrackers().then(setTrackers).catch(() => {}); }, []);
   useEffect(() => {
     let live = true;
     api.getDashboard(range)
@@ -52,7 +51,7 @@ export function Dashboard() {
   if (error) return <>{filter}<div className="banner-error">{error}</div></>;
   if (!data) return <>{filter}<p className="muted">Loading…</p></>;
 
-  const hasReadingArea = data.areas.some((a) => a.area.name.toLowerCase() === 'reading');
+  const hasReadingArea = data.areas.some((a) => isBooksArea(a.area));
   return (
     <div className="dash-grid">
       <div>
@@ -67,8 +66,8 @@ export function Dashboard() {
           area={area}
           activeDates={activeDates}
           data={data}
-          trackers={trackers.filter((t) => t.areaId === area.id)}
-          showPages={area.name.toLowerCase() === 'reading'}
+          trackers={data.trackers.filter((t) => t.areaId === area.id)}
+          showPages={isBooksArea(area)}
         />
       ))}
       {!hasReadingArea && data.pagesRead.some((w) => w.pages > 0) && (
@@ -79,10 +78,10 @@ export function Dashboard() {
 }
 
 function AreaCard({ area, activeDates, data, trackers, showPages }: {
-  area: Area; activeDates: string[]; data: DashboardData; trackers: Tracker[]; showPages: boolean;
+  area: Area; activeDates: DateStr[]; data: DashboardData; trackers: Tracker[]; showPages: boolean;
 }) {
   const goals = data.goals.filter((g) => g.areaId === area.id);
-  const groups = groupBySubject(visibleTrackers(trackers, data));
+  const groups = groupBySubject(visibleTrackers(trackers, data), trackers);
   const ungrouped = groups.find((g) => g.key === null)?.trackers ?? [];
   const subjects = groups.filter((g) => g.key !== null);
   const bySubject = subjects.length > 0 ? subjectTimeChart(groups, data) : null;
@@ -115,10 +114,16 @@ function SubjectSection({ label, trackers, data, color }: { label: string; track
   const specs = quantityCharts(trackers, data);
   const ratings = trackers.filter((t) => t.kind === 'rating');
   const anyRating = data.mood.some((m) => ratings.some((t) => t.id === m.trackerId));
+  // Check trackers have no chart of their own, so name their days here rather than call the section empty.
+  const checks = trackers.flatMap((t) => {
+    const days = data.checkDays.find((c) => c.trackerId === t.id)?.days;
+    return days === undefined ? [] : [`${t.name}: ${days} ${days === 1 ? 'day' : 'days'}`];
+  });
   return (
     <div className="subject-section">
       <h3>{label}</h3>
-      {specs.length === 0 && !anyRating && <p className="muted">Nothing logged in this range.</p>}
+      {specs.length === 0 && !anyRating && checks.length === 0 && <p className="muted">Nothing logged in this range.</p>}
+      {checks.length > 0 && <p className="muted">{checks.join(' · ')}</p>}
       <BarCharts specs={specs} data={data} />
       <RatingChart ratings={ratings} data={data} color={color} />
     </div>

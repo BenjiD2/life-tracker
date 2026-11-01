@@ -5,21 +5,7 @@ import type { Area, GoalSource, GoalWithProgress, Kind, Period, Tracker } from '
 import * as api from '../api';
 import { InlineText } from '../components/InlineText';
 import { formatNumber } from '../format';
-
-/** Wraps a write so its failure lands in a section's error line instead of throwing. */
-function useAttempt(after: () => Promise<unknown>) {
-  const [error, setError] = useState<string | null>(null);
-  async function attempt(write: () => Promise<unknown>) {
-    try {
-      await write();
-      setError(null);
-    } catch (e) {
-      setError(api.errorMessage(e));
-    }
-    await after();
-  }
-  return { error, attempt };
-}
+import { useAttempt, type Attempt } from '../useAttempt';
 
 export function Manage() {
   const [areas, setAreas] = useState<Area[]>([]);
@@ -44,13 +30,13 @@ export function Manage() {
 }
 
 function AreasSection({ areas, refresh }: { areas: Area[]; refresh: () => Promise<unknown> }) {
-  const { error, attempt } = useAttempt(refresh);
+  const { errors, attempt } = useAttempt(refresh);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#888888');
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    attempt(async () => { await api.createArea({ name, color }); setName(''); });
+    attempt('new', async () => { await api.createArea({ name, color }); setName(''); });
   };
 
   return (
@@ -60,12 +46,13 @@ function AreasSection({ areas, refresh }: { areas: Area[]; refresh: () => Promis
         {areas.map((a) => (
           <li key={a.id} className="row">
             <input type="color" aria-label={`Color of ${a.name}`} value={a.color}
-              onChange={(e) => attempt(() => api.updateArea(a.id, { color: e.target.value }))} />
-            <InlineText label={`Name of ${a.name}`} value={a.name} onSave={(v) => attempt(() => api.updateArea(a.id, { name: v }))} />
+              onChange={(e) => attempt(`a${a.id}`, () => api.updateArea(a.id, { color: e.target.value }))} />
+            <InlineText label={`Name of ${a.name}`} value={a.name} onSave={(v) => attempt(`a${a.id}`, () => api.updateArea(a.id, { name: v }))} />
             <button type="button" className="danger" style={{ marginLeft: 'auto' }}
-              onClick={() => confirm(`Delete area "${a.name}"?`) && attempt(() => api.deleteArea(a.id))}>
+              onClick={() => confirm(`Delete area "${a.name}"?`) && attempt(`a${a.id}`, () => api.deleteArea(a.id))}>
               Delete
             </button>
+            {errors[`a${a.id}`] && <div className="field-error row-error">{errors[`a${a.id}`]}</div>}
           </li>
         ))}
       </ul>
@@ -74,13 +61,13 @@ function AreasSection({ areas, refresh }: { areas: Area[]; refresh: () => Promis
         <input type="text" aria-label="New area name" placeholder="New area" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit" className="primary">Add area</button>
       </form>
-      {error && <div className="field-error">{error}</div>}
+      {errors.new && <div className="field-error">{errors.new}</div>}
     </section>
   );
 }
 
 function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers: Tracker[]; refresh: () => Promise<unknown> }) {
-  const { error, attempt } = useAttempt(refresh);
+  const { errors, attempt } = useAttempt(refresh);
   const [form, setForm] = useState<{ areaId: string; name: string; kind: Kind; unit: string; subject: string; minutesPerUnit: string }>(
     { areaId: '', name: '', kind: 'check', unit: '', subject: '', minutesPerUnit: '' },
   );
@@ -91,7 +78,7 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    attempt(async () => {
+    attempt('new', async () => {
       const quantity = form.kind === 'quantity';
       await api.createTracker({
         areaId: formAreaId,
@@ -107,30 +94,31 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
 
   const row = (t: Tracker) => (
     <li key={t.id} className="row">
-      <InlineText label={`Name of ${t.name}`} value={t.name} onSave={(v) => attempt(() => api.updateTracker(t.id, { name: v }))} />
+      <InlineText label={`Name of ${t.name}`} value={t.name} onSave={(v) => attempt(`t${t.id}`, () => api.updateTracker(t.id, { name: v }))} />
       <select aria-label={`Area of ${t.name}`} value={t.areaId}
-        onChange={(e) => attempt(() => api.updateTracker(t.id, { areaId: Number(e.target.value) }))}>
+        onChange={(e) => attempt(`t${t.id}`, () => api.updateTracker(t.id, { areaId: Number(e.target.value) }))}>
         {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select>
       <span className="muted" title="Kind can't change after creation">{t.kind}</span>
       <InlineText label={`Subject of ${t.name}`} width="7rem" placeholder="subject" list={subjectsList(t.areaId)}
-        value={t.subject ?? ''} onSave={(v) => attempt(() => api.updateTracker(t.id, { subject: v }))} />
+        value={t.subject ?? ''} onSave={(v) => attempt(`t${t.id}`, () => api.updateTracker(t.id, { subject: v }))} />
       {t.kind === 'quantity' && (
         <InlineText label={`Unit of ${t.name}`} width="7rem" placeholder="unit" value={t.unit ?? ''}
-          onSave={(v) => attempt(() => api.updateTracker(t.id, { unit: v.trim() || null }))} />
+          onSave={(v) => attempt(`t${t.id}`, () => api.updateTracker(t.id, { unit: v.trim() || null }))} />
       )}
       {t.kind === 'quantity' && showMinutesPerUnit(t.unit, t.minutesPerUnit) && (
         <label className="row muted" title="Estimated minutes per unit, for estimated total time">≈
           <InlineText type="number" label={`Estimated minutes per unit of ${t.name}`} width="4.5rem" placeholder="—"
             value={t.minutesPerUnit === null ? '' : String(t.minutesPerUnit)}
-            onSave={(v) => attempt(() => api.updateTracker(t.id, { minutesPerUnit: minutesOrNull(v) }))} />
+            onSave={(v) => attempt(`t${t.id}`, () => api.updateTracker(t.id, { minutesPerUnit: minutesOrNull(v) }))} />
           min each
         </label>
       )}
       <button type="button" style={{ marginLeft: 'auto' }}
-        onClick={() => attempt(() => api.updateTracker(t.id, { archived: !t.archived }))}>
+        onClick={() => attempt(`t${t.id}`, () => api.updateTracker(t.id, { archived: !t.archived }))}>
         {t.archived ? 'Unarchive' : 'Archive'}
       </button>
+      {errors[`t${t.id}`] && <div className="field-error row-error">{errors[`t${t.id}`]}</div>}
     </li>
   );
 
@@ -178,7 +166,7 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
           value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
         <button type="submit" className="primary">Add tracker</button>
       </form>
-      {error && <div className="field-error">{error}</div>}
+      {errors.new && <div className="field-error">{errors.new}</div>}
       {archived.length > 0 && (
         <details style={{ marginTop: '0.8rem' }}>
           <summary className="muted">Archived ({archived.length})</summary>
@@ -186,11 +174,12 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
             <li key={t.id} className="row">
               <span>{t.name}</span>
               <select aria-label={`Area of ${t.name}`} value={t.areaId}
-                onChange={(e) => attempt(() => api.updateTracker(t.id, { areaId: Number(e.target.value) }))}>
+                onChange={(e) => attempt(`t${t.id}`, () => api.updateTracker(t.id, { areaId: Number(e.target.value) }))}>
                 {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
               <span className="muted">{t.kind}</span>
-              <button type="button" style={{ marginLeft: 'auto' }} onClick={() => attempt(() => api.updateTracker(t.id, { archived: false }))}>Unarchive</button>
+              <button type="button" style={{ marginLeft: 'auto' }} onClick={() => attempt(`t${t.id}`, () => api.updateTracker(t.id, { archived: false }))}>Unarchive</button>
+              {errors[`t${t.id}`] && <div className="field-error row-error">{errors[`t${t.id}`]}</div>}
             </li>
           ))}</ul>
         </details>
@@ -224,21 +213,18 @@ function toGoalInput(f: GoalForm, fallbackAreaId: number): GoalInput {
     return { ...base, type: 'consistency', period: f.period, targetDays: Number(f.targetDays),
       scopeTrackerId: f.scopeTrackerId ? Number(f.scopeTrackerId) : null };
   }
-  return {
-    ...base,
-    type: 'completion',
-    source: f.source,
-    target: f.source === 'checklist' ? null : Number(f.target),
-    deadline: f.deadline || null,
-    sourceTrackerId: f.source === 'tracker' ? Number(f.sourceTrackerId) || null : null,
-    bookTopic: f.source === 'books' && f.bookTopic ? f.bookTopic : null,
-  };
+  const completion = { ...base, type: 'completion' as const, deadline: f.deadline || null };
+  switch (f.source) {
+    case 'books': return { ...completion, source: 'books', target: Number(f.target), bookTopic: f.bookTopic || null };
+    case 'tracker': return { ...completion, source: 'tracker', target: Number(f.target), sourceTrackerId: Number(f.sourceTrackerId) };
+    case 'checklist': return { ...completion, source: 'checklist' };
+  }
 }
 
 function GoalsSection({ areas, trackers, goals, refresh }: {
   areas: Area[]; trackers: Tracker[]; goals: GoalWithProgress[]; refresh: () => Promise<unknown>;
 }) {
-  const { error, attempt } = useAttempt(refresh);
+  const { errors, attempt } = useAttempt(refresh);
   const [f, setF] = useState<GoalForm>(emptyGoal);
   const set = <K extends keyof GoalForm>(k: K, v: GoalForm[K]) => setF((prev) => ({ ...prev, [k]: v }));
   const areaId = Number(f.areaId) || areas[0]?.id || 0;
@@ -247,14 +233,14 @@ function GoalsSection({ areas, trackers, goals, refresh }: {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    attempt(async () => { await api.createGoal(toGoalInput(f, areaId)); setF({ ...emptyGoal, areaId: f.areaId }); });
+    attempt('new', async () => { await api.createGoal(toGoalInput(f, areaId)); setF({ ...emptyGoal, areaId: f.areaId }); });
   };
 
   return (
     <section className="card">
       <h2>Goals</h2>
       <ul className="list">
-        {goals.map((g) => <GoalRow key={g.id} goal={g} areas={areas} attempt={attempt} />)}
+        {goals.map((g) => <GoalRow key={g.id} goal={g} areas={areas} attempt={attempt} errors={errors} />)}
       </ul>
 
       <form className="stack" onSubmit={submit} style={{ marginTop: '0.8rem' }}>
@@ -307,13 +293,13 @@ function GoalsSection({ areas, trackers, goals, refresh }: {
         )}
         <div><button type="submit" className="primary">Add goal</button></div>
       </form>
-      {error && <div className="field-error">{error}</div>}
+      {errors.new && <div className="field-error">{errors.new}</div>}
     </section>
   );
 }
 
-function GoalRow({ goal: g, areas, attempt }: {
-  goal: GoalWithProgress; areas: Area[]; attempt: (w: () => Promise<unknown>) => Promise<void>;
+function GoalRow({ goal: g, areas, attempt, errors }: {
+  goal: GoalWithProgress; areas: Area[]; attempt: Attempt; errors: Record<string, string>;
 }) {
   const [newItem, setNewItem] = useState('');
   const area = areas.find((a) => a.id === g.areaId);
@@ -328,49 +314,52 @@ function GoalRow({ goal: g, areas, attempt }: {
     <li className="stack">
       <div className="row">
         <span style={{ width: 10, height: 10, borderRadius: 5, background: area?.color }} />
-        <InlineText label={`Title of ${g.title}`} value={g.title} onSave={(v) => attempt(() => api.updateGoal(g.id, { title: v }))} />
+        <InlineText label={`Title of ${g.title}`} value={g.title} onSave={(v) => attempt(`g${g.id}`, () => api.updateGoal(g.id, { title: v }))} />
         <span className="muted">{area?.name} · {describe}</span>
         <strong style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
           {formatNumber(g.progress.current)} / {formatNumber(g.progress.target)}
         </strong>
-        <button type="button" className="danger" onClick={() => confirm(`Delete goal "${g.title}"?`) && attempt(() => api.deleteGoal(g.id))}>Delete</button>
+        <button type="button" className="danger" onClick={() => confirm(`Delete goal "${g.title}"?`) && attempt(`g${g.id}`, () => api.deleteGoal(g.id))}>Delete</button>
       </div>
       <div className="row">
         {g.type === 'consistency' && (
           <label className="row muted">Target days
-            <InlineText type="number" width="5rem" label="Target days" value={String(g.targetDays ?? '')}
-              onSave={(v) => attempt(() => api.updateGoal(g.id, { targetDays: Number(v) }))} />
+            <InlineText type="number" width="5rem" label="Target days" required value={String(g.targetDays ?? '')}
+              onSave={(v) => attempt(`g${g.id}`, () => api.updateGoal(g.id, { targetDays: Number(v) }))} />
           </label>
         )}
         {g.type === 'completion' && g.source !== 'checklist' && (
           <label className="row muted">Target
-            <InlineText type="number" width="6rem" label="Target" value={String(g.target ?? '')}
-              onSave={(v) => attempt(() => api.updateGoal(g.id, { target: Number(v) }))} />
+            <InlineText type="number" width="6rem" label="Target" required value={String(g.target ?? '')}
+              onSave={(v) => attempt(`g${g.id}`, () => api.updateGoal(g.id, { target: Number(v) }))} />
           </label>
         )}
         {g.type === 'completion' && (
           <label className="row muted">Deadline
             <InlineText type="date" label="Deadline" value={g.deadline ?? ''}
-              onSave={(v) => attempt(() => api.updateGoal(g.id, { deadline: v || null }))} />
+              onSave={(v) => attempt(`g${g.id}`, () => api.updateGoal(g.id, { deadline: v || null }))} />
           </label>
         )}
       </div>
+      {errors[`g${g.id}`] && <div className="field-error row-error">{errors[`g${g.id}`]}</div>}
       {g.source === 'checklist' && (
         <div style={{ paddingLeft: '1.2rem' }}>
           <ul className="list">
             {g.items.map((it) => (
               <li key={it.id} className="row">
                 <input type="checkbox" aria-label={`Done: ${it.label}`} checked={it.doneAt !== null}
-                  onChange={(e) => attempt(() => api.updateGoalItem(it.id, { done: e.target.checked }))} />
-                <InlineText label={`Label of ${it.label}`} value={it.label} onSave={(v) => attempt(() => api.updateGoalItem(it.id, { label: v }))} />
-                <button type="button" className="link danger" style={{ marginLeft: 'auto' }} onClick={() => attempt(() => api.deleteGoalItem(it.id))}>remove</button>
+                  onChange={(e) => attempt(`i${it.id}`, () => api.updateGoalItem(it.id, { done: e.target.checked }))} />
+                <InlineText label={`Label of ${it.label}`} value={it.label} onSave={(v) => attempt(`i${it.id}`, () => api.updateGoalItem(it.id, { label: v }))} />
+                <button type="button" className="link danger" style={{ marginLeft: 'auto' }} onClick={() => attempt(`i${it.id}`, () => api.deleteGoalItem(it.id))}>remove</button>
+                {errors[`i${it.id}`] && <div className="field-error row-error">{errors[`i${it.id}`]}</div>}
               </li>
             ))}
           </ul>
-          <form className="row" onSubmit={(e) => { e.preventDefault(); attempt(async () => { await api.createGoalItem(g.id, { label: newItem }); setNewItem(''); }); }}>
+          <form className="row" onSubmit={(e) => { e.preventDefault(); attempt(`g${g.id}new`, async () => { await api.createGoalItem(g.id, { label: newItem }); setNewItem(''); }); }}>
             <input type="text" aria-label="New item" placeholder="New item" value={newItem} onChange={(e) => setNewItem(e.target.value)} />
             <button type="submit">Add item</button>
           </form>
+          {errors[`g${g.id}new`] && <div className="field-error row-error">{errors[`g${g.id}new`]}</div>}
         </div>
       )}
     </li>

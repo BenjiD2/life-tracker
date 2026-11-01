@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { isBooksArea } from '../../../shared/books-area';
 import { addDays, todayLocal } from '../../../shared/dates';
 import { groupBySubject } from '../../../shared/subjects';
 import type { Area, BookWithPage, DateStr, Entry, GoalWithProgress, Tracker } from '../../../shared/types';
 import * as api from '../api';
 import { GoalStrip } from '../components/GoalStrip';
+import { InlineText } from '../components/InlineText';
 import { TrackerInput } from '../components/TrackerInput';
 import { formatDay } from '../format';
+import { logPage } from '../logPage';
+import { useAttempt } from '../useAttempt';
 
 export function Today() {
   const [date, setDate] = useState<DateStr>(() => todayLocal());
@@ -14,37 +18,28 @@ export function Today() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [books, setBooks] = useState<BookWithPage[]>([]);
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const refreshGoals = useCallback(() => api.getGoals().then(setGoals), []);
-  const refreshBooks = useCallback(() => api.getBooks().then(setBooks), []);
+  /** The goal strip and reading rows depend on every write. */
+  const refreshProgress = () =>
+    Promise.all([api.getGoals(), api.getBooks()])
+      .then(([g, b]) => { setGoals(g); setBooks(b); })
+      .catch((e) => setLoadError(api.errorMessage(e)));
+  const { errors, attempt, clearErrors } = useAttempt(refreshProgress);
 
   useEffect(() => {
     Promise.all([api.getAreas(), api.getTrackers()])
       .then(([a, t]) => { setAreas(a); setTrackers(t); })
       .catch((e) => setLoadError(api.errorMessage(e)));
-    refreshGoals().catch(() => {});
-    refreshBooks().catch(() => {});
-  }, [refreshGoals, refreshBooks]);
+    refreshProgress();
+  }, []);
 
   useEffect(() => {
     let live = true;
-    setErrors({});
+    clearErrors();
     api.getEntries(date).then((e) => live && setEntries(e)).catch((e) => setLoadError(api.errorMessage(e)));
     return () => { live = false; };
   }, [date]);
-
-  /** Runs a write, records its error under `key`, and refreshes the goal strip on success. */
-  async function attempt(key: string, write: () => Promise<void>) {
-    try {
-      await write();
-      setErrors(({ [key]: _, ...rest }) => rest);
-      refreshGoals().catch(() => {});
-    } catch (e) {
-      setErrors((prev) => ({ ...prev, [key]: api.errorMessage(e) }));
-    }
-  }
 
   const save = (t: Tracker, value: number, note: string | null) =>
     attempt(`t${t.id}`, async () => {
@@ -56,11 +51,7 @@ export function Today() {
       await api.deleteEntry(t.id, date);
       setEntries((prev) => prev.filter((e) => e.trackerId !== t.id));
     });
-  const savePage = (b: BookWithPage, page: number) =>
-    attempt(`b${b.id}`, async () => {
-      await api.logPage(b, date, page);
-      await refreshBooks();
-    });
+  const savePage = (b: BookWithPage, page: number) => attempt(`b${b.id}`, () => logPage(b, date, page));
 
   const today = todayLocal();
   const active = trackers.filter((t) => !t.archived);
@@ -86,7 +77,7 @@ export function Today() {
         return (
           <section key={area.id} className="card area-card" style={{ borderLeftColor: area.color }}>
             <h2>{area.name}</h2>
-            {groupBySubject(own).map((g) => (
+            {groupBySubject(own, trackers.filter((t) => t.areaId === area.id)).map((g) => (
               <div key={g.key ?? ''}>
                 {g.label !== null && <h3 className="subject-head">{g.label}</h3>}
                 {g.trackers.map((t) => (
@@ -106,7 +97,7 @@ export function Today() {
       })}
 
       {reading.length > 0 && (
-        <section className="card area-card" style={{ borderLeftColor: areas.find((a) => a.name === 'Reading')?.color }}>
+        <section className="card area-card" style={{ borderLeftColor: areas.find(isBooksArea)?.color }}>
           <h2>Reading</h2>
           {reading.map((b) => (
             <PageRow key={`${b.id}-${date}`} book={b} onSave={(p) => savePage(b, p)} error={errors[`b${b.id}`]} />
@@ -120,24 +111,19 @@ export function Today() {
 }
 
 function PageRow({ book, onSave, error }: { book: BookWithPage; onSave: (page: number) => void; error?: string }) {
-  const [draft, setDraft] = useState(String(book.currentPage));
-  useEffect(() => setDraft(String(book.currentPage)), [book.currentPage]);
-  const commit = () => {
-    if (draft.trim() !== '' && Number(draft) !== book.currentPage) onSave(Number(draft));
-  };
   return (
     <div className="tracker">
       <label className="tracker-name" htmlFor={`b${book.id}`}>{book.title}</label>
       <div className="tracker-control quantity">
-        <input
+        <InlineText
           id={`b${book.id}`}
           type="number"
+          label={book.title}
           min={0}
           max={book.totalPages}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          required
+          value={String(book.currentPage)}
+          onSave={(v) => onSave(Number(v))}
         />
         <span className="unit">/ {book.totalPages} pages</span>
       </div>

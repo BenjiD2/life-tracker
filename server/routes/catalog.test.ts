@@ -126,3 +126,20 @@ describe('tracker subject and minutes per unit', () => {
     expect((await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { minutesPerUnit: -5 })).status).toBe(400);
   });
 });
+
+describe('errors', () => {
+  it('malformed JSON → 400 with an error string, not 500', async () => {
+    const { app } = setup();
+    const res = await app.request('/api/areas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{oops' });
+    expect(res.status).toBe(400);
+    expect(typeof (await res.json()).error).toBe('string');
+  });
+
+  it('PATCH /areas with a bad colour → 400', async () => {
+    const { req } = setup();
+    const area = (await req('GET', '/api/areas')).body[0];
+    const r = await req('PATCH', `/api/areas/${area.id}`, { color: 'red' });
+    expect(r.status).toBe(400);
+    expect(typeof r.body.error).toBe('string');
+  });
+});

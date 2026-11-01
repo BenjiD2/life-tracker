@@ -60,3 +60,11 @@ describe('GET/DELETE /api/entries', () => {
     expect((await req('GET', '/api/entries?date=nope')).status).toBe(400);
   });
 });
+
+describe('DELETE /api/entries validation', () => {
+  it('a bad date or tracker id → 400', async () => {
+    const { req, trackerId } = setup();
+    expect((await req('DELETE', `/api/entries?trackerId=${trackerId('Tennis')}&date=nope`)).status).toBe(400);
+    expect((await req('DELETE', '/api/entries?trackerId=x&date=2026-10-15')).status).toBe(400);
+  });
+});

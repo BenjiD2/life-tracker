@@ -73,6 +73,8 @@ input[type='checkbox'] { width: 1.15rem; height: 1.15rem; accent-color: var(--ac
 }
 .tracker + .tracker { border-top: 1px solid var(--border); }
 .field-error { grid-column: 2; color: var(--error); font-size: 0.85rem; }
+/* An error inside a wrapping .row: on its own line, under the inputs it's about. */
+.row-error { grid-column: auto; flex-basis: 100%; }
 .quantity { display: inline-flex; gap: 0.4rem; align-items: center; }
 .quantity input { width: 6rem; }
 .unit { color: var(--muted); font-size: 0.9rem; }

@@ -48,3 +48,13 @@ export function periodBounds(d: DateStr, period: Period): { start: DateStr; end:
   // Day 0 of the next month is the last day of this one.
   return { start: `${pad(y, 4)}-${pad(m)}-01`, end: fromUtcMs(Date.UTC(y, m, 0)) };
 }
+
+/** A date string formatted for the user's locale, without passing through local-time Date parsing. */
+export function formatDate(d: DateStr, options: Intl.DateTimeFormatOptions): string {
+  return new Date(toUtcMs(d)).toLocaleDateString(undefined, { ...options, timeZone: 'UTC' });
+}
+
+/** 'YYYY-MM-DD-HHMM' in the machine's local time zone, for file names. */
+export function localTimestamp(now: Date = new Date()): string {
+  return `${todayLocal(now)}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+}

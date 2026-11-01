@@ -8,10 +8,17 @@ import type { DateStr, Period } from '../../shared/types';
 export function activeDates(
   entries: { trackerId: number; date: DateStr; value?: number }[],
   trackerIds: ReadonlySet<number>,
+  /** Dates active for another reason (days with pages read, for the books area). */
+  alsoActive: Iterable<DateStr> = [],
 ): Set<DateStr> {
-  const out = new Set<DateStr>();
+  const out = new Set<DateStr>(alsoActive);
   for (const e of entries) if (trackerIds.has(e.trackerId) && e.value !== 0) out.add(e.date);
   return out;
+}
+
+/** The dates in [start, end], inclusive, ascending. */
+export function datesInRange(dates: Iterable<DateStr>, start: DateStr, end: DateStr): DateStr[] {
+  return [...dates].filter((d) => d >= start && d <= end).sort();
 }
 
 /** How many of `dates` fall in [start, end], inclusive. */

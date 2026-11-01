@@ -5,24 +5,17 @@ import type { BookStatus, BookWithPage } from '../../../shared/types';
 import * as api from '../api';
 import { InlineText } from '../components/InlineText';
 import { formatDay } from '../format';
+import { logPage } from '../logPage';
+import { useAttempt } from '../useAttempt';
 
 export function Books() {
   const [books, setBooks] = useState<BookWithPage[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
 
   const refresh = () => api.getBooks().then(setBooks).catch((e) => setError(api.errorMessage(e)));
   useEffect(() => { refresh(); }, []);
 
-  async function attempt(bookId: number, write: () => Promise<unknown>) {
-    try {
-      await write();
-      setRowErrors(({ [bookId]: _, ...rest }) => rest);
-      await refresh();
-    } catch (e) {
-      setRowErrors((prev) => ({ ...prev, [bookId]: api.errorMessage(e) }));
-    }
-  }
+  const { errors: rowErrors, attempt } = useAttempt(refresh);
 
   const reading = books.filter((b) => b.status === 'reading');
   const done = books.filter((b) => b.status === 'done').sort((a, b) => (b.finished ?? '').localeCompare(a.finished ?? ''));
@@ -36,14 +29,14 @@ export function Books() {
   );
   const editor = (b: BookWithPage) =>
     editing === b.id && (
-      <BookEditor book={b} save={(patch) => attempt(b.id, () => api.updateBook(b.id, patch))} error={rowErrors[b.id]} />
+      <BookEditor book={b} save={(patch) => attempt(String(b.id), () => api.updateBook(b.id, patch))} error={rowErrors[b.id]} />
     );
 
   const statusSelect = (b: BookWithPage) => (
     <select
       aria-label={`Status of ${b.title}`}
       value={b.status}
-      onChange={(e) => attempt(b.id, () => api.updateBook(b.id, { status: e.target.value as BookStatus }))}
+      onChange={(e) => attempt(String(b.id), () => api.updateBook(b.id, { status: e.target.value as BookStatus }))}
     >
       <option value="reading">Reading</option>
       <option value="done">Done</option>
@@ -76,8 +69,9 @@ export function Books() {
                   type="number"
                   width="6rem"
                   label={`Page reached in ${b.title}`}
+                  required
                   value={String(b.currentPage)}
-                  onSave={(v) => attempt(b.id, () => api.logPage(b, todayLocal(), Number(v)))}
+                  onSave={(v) => attempt(String(b.id), () => logPage(b, todayLocal(), Number(v)))}
                 />
                 <span className="muted">of {b.totalPages} ({Math.round((b.currentPage / b.totalPages) * 100)}%)</span>
               </div>
@@ -129,24 +123,20 @@ export function Books() {
   );
 }
 
-function AddBook({ onAdded }: { onAdded: () => void }) {
+function AddBook({ onAdded }: { onAdded: () => Promise<unknown> }) {
   const [form, setForm] = useState({ title: '', author: '', totalPages: '', startPage: '', topic: '' });
-  const [error, setError] = useState<string | null>(null);
+  const { errors, attempt } = useAttempt(onAdded);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
-  async function submit(e: FormEvent) {
+  function submit(e: FormEvent) {
     e.preventDefault();
-    try {
+    attempt('add', async () => {
       await api.createBook({
         title: form.title, author: form.author, totalPages: Number(form.totalPages), topic: form.topic || null,
         startPage: form.startPage ? Number(form.startPage) : undefined,
       });
       setForm({ title: '', author: '', totalPages: '', startPage: '', topic: '' });
-      setError(null);
-      onAdded();
-    } catch (err) {
-      setError(api.errorMessage(err));
-    }
+    });
   }
 
   return (
@@ -160,7 +150,7 @@ function AddBook({ onAdded }: { onAdded: () => void }) {
         <input type="text" aria-label="Topic" placeholder="Topic (optional)" value={form.topic} onChange={set('topic')} />
         <button type="submit" className="primary">Add</button>
       </form>
-      {error && <div className="field-error">{error}</div>}
+      {errors.add && <div className="field-error">{errors.add}</div>}
     </section>
   );
 }
@@ -177,10 +167,10 @@ function BookEditor({ book, save, error }: { book: BookWithPage; save: (patch: B
           <InlineText label="Author" value={book.author} onSave={(v) => save({ author: v })} />
         </label>
         <label className="row muted">Pages
-          <InlineText type="number" width="6rem" label="Total pages" value={String(book.totalPages)} onSave={(v) => save({ totalPages: Number(v) })} />
+          <InlineText type="number" width="6rem" label="Total pages" required value={String(book.totalPages)} onSave={(v) => save({ totalPages: Number(v) })} />
         </label>
         <label className="row muted" title="Page you were on when you started tracking this book">Started at page
-          <InlineText type="number" width="5rem" label="Started at page" value={String(book.startPage)} onSave={(v) => save({ startPage: Number(v) })} />
+          <InlineText type="number" width="5rem" label="Started at page" required value={String(book.startPage)} onSave={(v) => save({ startPage: Number(v) })} />
         </label>
         <label className="row muted">Topic
           <InlineText label="Topic" width="8rem" placeholder="none" value={book.topic ?? ''} onSave={(v) => save({ topic: v.trim() || null })} />

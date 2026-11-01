@@ -68,7 +68,7 @@ describe('starting page (progress from before tracking)', () => {
     expect(book.startPage).toBe(200);
     expect((await req('GET', '/api/books')).body[0].currentPage).toBe(200);
     await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-14', pageReached: 230 });
-    const d = (await req('GET', '/api/dashboard')).body;
+    const d = (await req('GET', '/api/dashboard?from=2026-07-27&to=2026-10-15')).body;
     expect(d.pagesRead.at(-1)).toEqual({ periodStart: '2026-10-12', pages: 30 });
   });
 
@@ -98,7 +98,7 @@ describe('PUT /api/reading-log', () => {
     const { req, db, book } = await withBook();
     await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 50 });
     const r = await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 60 });
-    expect(r).toMatchObject({ status: 200, body: { row: { pageReached: 60 }, reachedEnd: false } });
+    expect(r).toMatchObject({ status: 200, body: { pageReached: 60 } });
     const { readingLog } = await import('../db/schema');
     expect(db.select().from(readingLog).all()).toHaveLength(1);
   });
@@ -109,10 +109,25 @@ describe('PUT /api/reading-log', () => {
     expect((await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: -1 })).status).toBe(400);
   });
 
-  it('reachedEnd is true on the last page', async () => {
+  it('finish on the last page marks the book done on the date of the log', async () => {
     const { req, book } = await withBook(200);
-    expect((await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 200 })).body.reachedEnd)
-      .toBe(true);
+    const r = await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 200, finish: true });
+    expect(r).toMatchObject({ status: 200, body: { pageReached: 200 } });
+    expect((await req('GET', '/api/books')).body[0]).toMatchObject({ status: 'done', finished: '2026-10-01', currentPage: 200 });
+  });
+
+  it('the last page without finish leaves the book reading', async () => {
+    const { req, book } = await withBook(200);
+    await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 200 });
+    expect((await req('GET', '/api/books')).body[0]).toMatchObject({ status: 'reading', finished: null });
+  });
+
+  it('finish before the last page → 400, and neither the log nor the status changes', async () => {
+    const { req, db, book } = await withBook(200);
+    const { readingLog } = await import('../db/schema');
+    expect((await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-01', pageReached: 199, finish: true })).status).toBe(400);
+    expect(db.select().from(readingLog).all()).toEqual([]);
+    expect((await req('GET', '/api/books')).body[0].status).toBe('reading');
   });
 
   it('unknown book → 404', async () => {

@@ -3,14 +3,8 @@ import type {
   ReadingLogInput, TrackerInput, TrackerPatch,
 } from '../../shared/schemas';
 import type {
-  Area, Book, BookWithPage, DashboardData, DateStr, Entry, GoalItem, GoalWithProgress, ReadingLogResult, Tracker,
+  Area, Book, BookWithPage, DashboardData, DateStr, Entry, GoalItem, GoalWithProgress, ReadingLogRow, Tracker,
 } from '../../shared/types';
-
-export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
-}
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -20,11 +14,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({ error: res.statusText }));
-  if (!res.ok) throw new ApiError(data.error ?? res.statusText, res.status);
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
   return data as T;
 }
 
-const q = (params: Record<string, string | number>) => new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
+const searchParams = (params: Record<string, string | number>) => new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
 
 export const getAreas = () => call<Area[]>('GET', '/areas');
 export const createArea = (input: AreaInput) => call<Area>('POST', '/areas', input);
@@ -35,14 +29,14 @@ export const getTrackers = () => call<Tracker[]>('GET', '/trackers');
 export const createTracker = (input: TrackerInput) => call<Tracker>('POST', '/trackers', input);
 export const updateTracker = (id: number, patch: TrackerPatch) => call<Tracker>('PATCH', `/trackers/${id}`, patch);
 
-export const getEntries = (date: DateStr) => call<Entry[]>('GET', `/entries?${q({ date })}`);
+export const getEntries = (date: DateStr) => call<Entry[]>('GET', `/entries?${searchParams({ date })}`);
 export const putEntry = (input: EntryInput) => call<Entry>('PUT', '/entries', input);
-export const deleteEntry = (trackerId: number, date: DateStr) => call<void>('DELETE', `/entries?${q({ trackerId, date })}`);
+export const deleteEntry = (trackerId: number, date: DateStr) => call<void>('DELETE', `/entries?${searchParams({ trackerId, date })}`);
 
 export const getBooks = () => call<BookWithPage[]>('GET', '/books');
 export const createBook = (input: BookInput) => call<Book>('POST', '/books', input);
 export const updateBook = (id: number, patch: BookPatch) => call<Book>('PATCH', `/books/${id}`, patch);
-export const putReadingLog = (input: ReadingLogInput) => call<ReadingLogResult>('PUT', '/reading-log', input);
+export const putReadingLog = (input: ReadingLogInput) => call<ReadingLogRow>('PUT', '/reading-log', input);
 
 export const getGoals = () => call<GoalWithProgress[]>('GET', '/goals');
 export const createGoal = (input: GoalInput) => call<GoalWithProgress>('POST', '/goals', input);
@@ -52,18 +46,6 @@ export const createGoalItem = (goalId: number, input: GoalItemInput) => call<Goa
 export const updateGoalItem = (id: number, patch: GoalItemPatch) => call<GoalItem>('PATCH', `/goal-items/${id}`, patch);
 export const deleteGoalItem = (id: number) => call<void>('DELETE', `/goal-items/${id}`);
 
-/** Without a range the server uses its default (the last 12 weeks). */
-export const getDashboard = (range?: { from: DateStr; to: DateStr }) =>
-  call<DashboardData>('GET', range ? `/dashboard?${q(range)}` : '/dashboard');
+export const getDashboard = (range: { from: DateStr; to: DateStr }) => call<DashboardData>('GET', `/dashboard?${searchParams(range)}`);
 
 export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-/**
- * Saves a page position; if it reached the last page, asks whether to mark the book finished (spec §7).
- */
-export async function logPage(book: Book, date: DateStr, pageReached: number): Promise<void> {
-  const { reachedEnd } = await putReadingLog({ bookId: book.id, date, pageReached });
-  if (reachedEnd && book.status !== 'done' && confirm(`Mark '${book.title}' as finished?`)) {
-    await updateBook(book.id, { status: 'done', finished: date });
-  }
-}

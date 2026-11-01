@@ -37,9 +37,8 @@ export const entryInput = z.object({
 export const entryKey = z.object({ trackerId: z.coerce.number().int().positive(), date: dateStr });
 export const dateQuery = z.object({ date: dateStr });
 export const rangeQuery = z
-  .object({ from: dateStr.optional(), to: dateStr.optional() })
-  .refine((q) => (q.from === undefined) === (q.to === undefined), 'from and to go together')
-  .refine((q) => q.from === undefined || q.to === undefined || q.from <= q.to, 'from must be on or before to');
+  .object({ from: dateStr, to: dateStr })
+  .refine((q) => q.from <= q.to, 'from must be on or before to');
 
 export type AreaInput = z.infer<typeof areaInput>;
 export type AreaPatch = z.infer<typeof areaPatch>;
@@ -65,40 +64,38 @@ export const readingLogInput = z.object({
   bookId: id,
   date: dateStr,
   pageReached: z.number().int().min(0, 'must be 0 or more'),
+  /** Also mark the book done, as of `date`. Only valid on the book's last page. */
+  finish: z.boolean().optional(),
 });
 
 export type BookInput = z.infer<typeof bookInput>;
 export type BookPatch = z.infer<typeof bookPatch>;
 export type ReadingLogInput = z.infer<typeof readingLogInput>;
 
-const consistencyGoalInput = z.object({
-  type: z.literal('consistency'),
-  title: name,
-  areaId: id,
-  period: z.enum(['week', 'month']),
-  targetDays: z.number().int().min(1, 'must be at least 1'),
-  scopeTrackerId: id.nullish(),
-});
-const completionGoalInput = z.object({
-  type: z.literal('completion'),
-  title: name,
-  areaId: id,
-  source: z.enum(['books', 'tracker', 'checklist']),
-  // Ignored for checklist goals, whose target is their item count.
-  target: z.number().positive().min(1, 'must be at least 1').nullish(),
-  deadline: dateStr.nullish(),
-  sourceTrackerId: id.nullish(),
-  bookTopic: optionalText,
-});
-export const goalInput = z
-  .discriminatedUnion('type', [consistencyGoalInput, completionGoalInput])
-  .superRefine((g, ctx) => {
-    if (g.type !== 'completion') return;
-    if (g.source !== 'checklist' && g.target == null)
-      ctx.addIssue({ code: 'custom', path: ['target'], message: 'is required' });
-    if (g.source === 'tracker' && g.sourceTrackerId == null)
-      ctx.addIssue({ code: 'custom', path: ['sourceTrackerId'], message: 'is required for a tracker goal' });
-  });
+const goalBase = { title: name, areaId: id };
+const goalTarget = z.number({ error: 'is required' }).min(1, 'must be at least 1');
+const completionBase = { ...goalBase, type: z.literal('completion'), deadline: dateStr.nullish() };
+const completionGoalInput = z.discriminatedUnion('source', [
+  z.object({ ...completionBase, source: z.literal('books'), target: goalTarget, bookTopic: optionalText }),
+  z.object({
+    ...completionBase,
+    source: z.literal('tracker'),
+    target: goalTarget,
+    sourceTrackerId: z.number({ error: 'is required for a tracker goal' }).int().positive('is required for a tracker goal'),
+  }),
+  // A checklist's target is its item count.
+  z.object({ ...completionBase, source: z.literal('checklist') }),
+]);
+export const goalInput = z.discriminatedUnion('type', [
+  z.object({
+    ...goalBase,
+    type: z.literal('consistency'),
+    period: z.enum(['week', 'month']),
+    targetDays: z.number().int().min(1, 'must be at least 1'),
+    scopeTrackerId: id.nullish(),
+  }),
+  completionGoalInput,
+]);
 export const goalPatch = z
   .object({
     title: name,
