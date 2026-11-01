@@ -73,3 +73,14 @@ export interface GoalItem {
   label: string;
   doneAt: DateStr | null;
 }
+
+/** Calculated, never stored. `percent` is 0–100, and 0 when `target` is 0. */
+export interface GoalProgress {
+  current: number;
+  target: number;
+  percent: number;
+  /** Consecutive periods met (consistency goals); null for completion goals. */
+  streak: number | null;
+  /** Where the value should be today on a straight line to the deadline; null without a deadline. */
+  expected: number | null;
+}
