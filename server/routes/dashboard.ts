@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { addDays, periodBounds } from '../../shared/dates';
 import type { DashboardData, DateStr } from '../../shared/types';
 import type { Db } from '../db/client';
-import { areas, entries, readingLog, trackers } from '../db/schema';
+import { areas, books, entries, readingLog, trackers } from '../db/schema';
 import { pagesReadByDate, readingDates } from '../stats/reading';
 import { isBooksArea } from './books-area';
 import { activeDates } from '../stats/streaks';
@@ -23,10 +23,11 @@ export function dashboardRoutes(db: Db, today: () => DateStr) {
     const weekOf = (d: DateStr) => periodBounds(d, 'week').start;
 
     const logs = db.select().from(readingLog).all();
+    const startPages = new Map(db.select().from(books).all().map((b) => [b.id, b.startPage]));
     const areaRows = db.select().from(areas).all().map((area) => {
       const ids = new Set(allTrackers.filter((t) => t.areaId === area.id).map((t) => t.id));
       const active = activeDates(allEntries, ids);
-      if (isBooksArea(area)) for (const d of readingDates(logs)) active.add(d);
+      if (isBooksArea(area)) for (const d of readingDates(logs, startPages)) active.add(d);
       const dates = [...active].filter((d) => d >= yearAgo && d <= now).sort();
       return { area, activeDates: dates };
     });
@@ -49,7 +50,7 @@ export function dashboardRoutes(db: Db, today: () => DateStr) {
 
     // Deltas need each book's full history, so diff everything, then bucket.
     const pages = new Map<DateStr, number>();
-    for (const [date, n] of pagesReadByDate(logs)) {
+    for (const [date, n] of pagesReadByDate(logs, startPages)) {
       if (date < weekStarts[0] || date > now) continue;
       pages.set(weekOf(date), (pages.get(weekOf(date)) ?? 0) + n);
     }

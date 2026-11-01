@@ -130,15 +130,18 @@ export function Books() {
 }
 
 function AddBook({ onAdded }: { onAdded: () => void }) {
-  const [form, setForm] = useState({ title: '', author: '', totalPages: '', topic: '' });
+  const [form, setForm] = useState({ title: '', author: '', totalPages: '', startPage: '', topic: '' });
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      await api.createBook({ title: form.title, author: form.author, totalPages: Number(form.totalPages), topic: form.topic || null });
-      setForm({ title: '', author: '', totalPages: '', topic: '' });
+      await api.createBook({
+        title: form.title, author: form.author, totalPages: Number(form.totalPages), topic: form.topic || null,
+        startPage: form.startPage ? Number(form.startPage) : undefined,
+      });
+      setForm({ title: '', author: '', totalPages: '', startPage: '', topic: '' });
       setError(null);
       onAdded();
     } catch (err) {
@@ -153,6 +156,7 @@ function AddBook({ onAdded }: { onAdded: () => void }) {
         <input type="text" aria-label="Title" placeholder="Title" value={form.title} onChange={set('title')} />
         <input type="text" aria-label="Author" placeholder="Author" value={form.author} onChange={set('author')} />
         <input type="number" aria-label="Total pages" placeholder="Pages" style={{ width: '6rem' }} value={form.totalPages} onChange={set('totalPages')} />
+        <input type="number" aria-label="Already at page" placeholder="Already at page" title="If you started before tracking, the page you're on now" style={{ width: '9rem' }} value={form.startPage} onChange={set('startPage')} />
         <input type="text" aria-label="Topic" placeholder="Topic (optional)" value={form.topic} onChange={set('topic')} />
         <button type="submit" className="primary">Add</button>
       </form>
@@ -174,6 +178,9 @@ function BookEditor({ book, save, error }: { book: BookWithPage; save: (patch: B
         </label>
         <label className="row muted">Pages
           <InlineText type="number" width="6rem" label="Total pages" value={String(book.totalPages)} onSave={(v) => save({ totalPages: Number(v) })} />
+        </label>
+        <label className="row muted" title="Page you were on when you started tracking this book">Started at page
+          <InlineText type="number" width="5rem" label="Started at page" value={String(book.startPage)} onSave={(v) => save({ startPage: Number(v) })} />
         </label>
         <label className="row muted">Topic
           <InlineText label="Topic" width="8rem" placeholder="none" value={book.topic ?? ''} onSave={(v) => save({ topic: v.trim() || null })} />

@@ -61,6 +61,31 @@ describe('books', () => {
   });
 });
 
+describe('starting page (progress from before tracking)', () => {
+  it('POST with startPage: currentPage starts there, and the first log only counts pages beyond it', async () => {
+    const { req } = setup('2026-10-15');
+    const book = (await req('POST', '/api/books', { title: 'b', author: 'a', totalPages: 400, startPage: 200 })).body;
+    expect(book.startPage).toBe(200);
+    expect((await req('GET', '/api/books')).body[0].currentPage).toBe(200);
+    await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-14', pageReached: 230 });
+    const d = (await req('GET', '/api/dashboard')).body;
+    expect(d.pagesPerWeek.at(-1)).toEqual({ weekStart: '2026-10-12', pages: 30 });
+  });
+
+  it('startPage defaults to 0', async () => {
+    const { book } = await withBook();
+    expect(book.startPage).toBe(0);
+  });
+
+  it('startPage above totalPages → 400 (POST and PATCH); totalPages below startPage → 400', async () => {
+    const { req, book } = await withBook(200);
+    expect((await req('POST', '/api/books', { title: 'x', author: 'y', totalPages: 100, startPage: 101 })).status).toBe(400);
+    expect((await req('PATCH', `/api/books/${book.id}`, { startPage: 201 })).status).toBe(400);
+    expect((await req('PATCH', `/api/books/${book.id}`, { startPage: 50 })).body.startPage).toBe(50);
+    expect((await req('PATCH', `/api/books/${book.id}`, { totalPages: 40 })).status).toBe(400);
+  });
+});
+
 describe('PUT /api/reading-log', () => {
   it('currentPage follows the latest date', async () => {
     const { req, book } = await withBook();

@@ -1,0 +1,1 @@
+ALTER TABLE `books` ADD `start_page` integer DEFAULT 0 NOT NULL;

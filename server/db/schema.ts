@@ -32,6 +32,8 @@ export const books = sqliteTable('books', {
   title: text('title').notNull(),
   author: text('author').notNull(),
   totalPages: integer('total_pages').notNull(),
+  /** Page already reached before tracking began; the first log's pages read are measured from here. */
+  startPage: integer('start_page').notNull().default(0),
   status: text('status', { enum: ['reading', 'done', 'dropped'] }).notNull(),
   topic: text('topic'),
   started: text('started'),

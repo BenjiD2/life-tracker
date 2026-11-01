@@ -35,6 +35,8 @@ export interface Book {
   title: string;
   author: string;
   totalPages: number;
+  /** Page already reached before tracking began (0 for a new book). */
+  startPage: number;
   status: BookStatus;
   topic: string | null;
   started: DateStr | null;

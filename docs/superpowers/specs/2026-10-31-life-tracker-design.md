@@ -57,7 +57,8 @@ trackers     id, area_id → areas, name, kind ('check'|'quantity'|'rating'),
 entries      id, tracker_id → trackers, date ('YYYY-MM-DD'), value (number),
              note (nullable)
              UNIQUE (tracker_id, date)
-books        id, title, author, total_pages, status ('reading'|'done'|'dropped'),
+books        id, title, author, total_pages, start_page (default 0),
+             status ('reading'|'done'|'dropped'),
              topic (nullable), started (date, nullable), finished (date, nullable)
 reading_log  id, book_id → books, date ('YYYY-MM-DD'), page_reached
              UNIQUE (book_id, date)
@@ -102,7 +103,9 @@ An area can hold any mix of tracker kinds.
 - **Area active day:** a date counts as active for an area if any of the area's
   trackers has an entry on that date. No separate "worked out" checkbox.
 - **Pages read on a date:** `page_reached` minus the previous `page_reached`
-  for the same book (for a book's first log, minus 0).
+  for the same book (for a book's first log, minus its `start_page`: the page
+  already reached before tracking began, so prior progress isn't counted as
+  reading on the first day).
 - **Goal progress:** calculated from `entries`, `books`, `reading_log`, and
   `goal_items`. Goals store only their rules.
 - **Streaks:** see section 4.

@@ -41,10 +41,11 @@ export type EntryInput = z.infer<typeof entryInput>;
 const pages = z.number().int().positive('must be at least 1');
 const optionalText = z.string().trim().min(1).nullish();
 
-export const bookInput = z.object({ title: name, author: name, totalPages: pages, topic: optionalText });
+const startPage = z.number().int().min(0, 'must be 0 or more');
+export const bookInput = z.object({ title: name, author: name, totalPages: pages, topic: optionalText, startPage: startPage.optional() });
 export const bookPatch = z
   .object({
-    title: name, author: name, totalPages: pages, topic: optionalText,
+    title: name, author: name, totalPages: pages, topic: optionalText, startPage,
     status: z.enum(['reading', 'done', 'dropped']),
     /** When the book was finished, if not today (e.g. the last page was logged on a past date). */
     finished: dateStr,

@@ -12,7 +12,7 @@ const completionGoal = (o: Partial<Goal>): Goal =>
   ({ ...goalBase, type: 'completion', source: 'books', target: 1, deadline: '2026-12-31', ...o });
 let nextId = 1;
 const book = (o: Partial<Book>): Book => ({
-  id: nextId++, title: 't', author: 'a', totalPages: 100, status: 'reading', topic: null, started: null, finished: null, ...o,
+  id: nextId++, title: 't', author: 'a', totalPages: 100, startPage: 0, status: 'reading', topic: null, started: null, finished: null, ...o,
 });
 const entry = (value: number): Entry => ({ id: nextId++, trackerId: 1, date: `2026-10-${String(nextId % 28 + 1).padStart(2, '0')}`, value, note: null });
 const item = (doneAt: string | null): GoalItem => ({ id: nextId++, goalId: 1, label: 'i', doneAt });

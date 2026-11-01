@@ -17,14 +17,15 @@ export function bookRoutes(db: Db, today: () => DateStr) {
         const prev = latest.get(log.bookId);
         if (!prev || log.date > prev.date) latest.set(log.bookId, { date: log.date, page: log.pageReached });
       }
-      const out: BookWithPage[] = db.select().from(books).all().map((b) => ({ ...b, currentPage: latest.get(b.id)?.page ?? 0 }));
+      const out: BookWithPage[] = db.select().from(books).all().map((b) => ({ ...b, currentPage: latest.get(b.id)?.page ?? b.startPage }));
       return c.json(out);
     })
     .post('/books', validate('json', bookInput), (c) => {
       const input = c.req.valid('json');
+      if ((input.startPage ?? 0) > input.totalPages) return fail(c, 400, `startPage must be between 0 and ${input.totalPages}`);
       const row = db
         .insert(books)
-        .values({ ...input, topic: input.topic ?? null, status: 'reading', started: today() })
+        .values({ ...input, startPage: input.startPage ?? 0, topic: input.topic ?? null, status: 'reading', started: today() })
         .returning()
         .get();
       return c.json(row, 201);
@@ -34,6 +35,8 @@ export function bookRoutes(db: Db, today: () => DateStr) {
       if (!book) return fail(c, 404, 'Book not found');
       const patch = c.req.valid('json');
       if (Object.keys(patch).length === 0) return c.json(book);
+      const totalPages = patch.totalPages ?? book.totalPages;
+      if ((patch.startPage ?? book.startPage) > totalPages) return fail(c, 400, `startPage must be between 0 and ${totalPages}`);
       if (patch.totalPages !== undefined) {
         const highest = Math.max(0, ...db.select().from(readingLog).where(eq(readingLog.bookId, book.id)).all().map((l) => l.pageReached));
         if (patch.totalPages < highest) return fail(c, 400, `totalPages can't be below page ${highest}, which is already logged`);

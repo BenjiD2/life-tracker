@@ -14,6 +14,14 @@ describe('pagesReadByDate', () => {
     expect(r.get('2026-10-07')).toBe(0);
   });
 
+  it("measures a book's first log from its starting page, not 0", () => {
+    const r = pagesReadByDate(
+      [{ bookId: 1, date: '2026-10-01', pageReached: 210 }, { bookId: 2, date: '2026-10-01', pageReached: 15 }],
+      new Map([[1, 200]]), // book 2 has no starting page → 0
+    );
+    expect(r.get('2026-10-01')).toBe(25);
+  });
+
   it('is empty for no logs', () => {
     expect(pagesReadByDate([]).size).toBe(0);
   });

@@ -22,7 +22,10 @@ export function goalsWithProgress(db: Db, today: DateStr, onlyId?: number): Goal
   const allBooks = db.select().from(books).all();
   const allItems = db.select().from(goalItems).all();
   const booksAreaIds = new Set(db.select().from(areas).all().filter(isBooksArea).map((a) => a.id));
-  const readDays = booksAreaIds.size > 0 ? readingDates(db.select().from(readingLog).all()) : new Set<DateStr>();
+  const readDays =
+    booksAreaIds.size > 0
+      ? readingDates(db.select().from(readingLog).all(), new Map(allBooks.map((b) => [b.id, b.startPage])))
+      : new Set<DateStr>();
 
   return goalRows.map((goal) => {
     const items = allItems.filter((i) => i.goalId === goal.id);
