@@ -1,0 +1,50 @@
+import { addDays, periodBounds } from '../../shared/dates';
+import type { DateStr, Period } from '../../shared/types';
+
+/** Dates on which any of `trackerIds` has an entry. A day logged by several trackers appears once. */
+export function activeDates(
+  entries: { trackerId: number; date: DateStr }[],
+  trackerIds: ReadonlySet<number>,
+): Set<DateStr> {
+  const out = new Set<DateStr>();
+  for (const e of entries) if (trackerIds.has(e.trackerId)) out.add(e.date);
+  return out;
+}
+
+/** How many of `dates` fall in [start, end], inclusive. */
+export function countInRange(dates: ReadonlySet<DateStr>, start: DateStr, end: DateStr): number {
+  let n = 0;
+  // 'YYYY-MM-DD' strings sort the same as the dates they name, so string comparison is date comparison.
+  for (const d of dates) if (d >= start && d <= end) n++;
+  return n;
+}
+
+/**
+ * Number of consecutive periods, counting back from the current one, in which at
+ * least `targetDays` of `dates` fall (spec §4).
+ *
+ * - The current period (the one containing `today`) is unfinished:
+ *   if it already has `targetDays` active days it adds 1;
+ *   if not, it is skipped — it does NOT break the streak.
+ * - Every earlier period is complete: walk backward one period at a time,
+ *   adding 1 for each met period, and stop at the first one that misses the target.
+ *
+ * Hint: the period before the one starting at `start` is
+ * `periodBounds(addDays(start, -1), period)`.
+ */
+export function periodStreak(
+  dates: ReadonlySet<DateStr>,
+  period: Period,
+  targetDays: number,
+  today: DateStr,
+): number {
+  if (targetDays < 1) return 0; // every period would "meet" it, and the walk would never end
+  let { start, end } = periodBounds(today, period);
+  // The current period only ever adds; it is never the one that breaks the streak.
+  let streak = countInRange(dates, start, end) >= targetDays ? 1 : 0;
+  for (;;) {
+    ({ start, end } = periodBounds(addDays(start, -1), period));
+    if (countInRange(dates, start, end) < targetDays) return streak;
+    streak++;
+  }
+}
