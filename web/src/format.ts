@@ -9,3 +9,9 @@ export function formatDay(d: DateStr): string {
     weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
   });
 }
+
+/** 'Oct 12' for axis ticks. */
+export function formatShort(d: DateStr): string {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}

@@ -4,24 +4,24 @@ import { areas, trackers } from './schema';
 const SEED: { name: string; color: string; trackers: { name: string; kind: 'quantity' | 'rating'; unit: string | null }[] }[] = [
   {
     name: 'Fitness',
-    color: '#e4572e',
+    color: '#2a78d6',
     trackers: [
       { name: 'Tennis', kind: 'quantity', unit: 'minutes' },
       { name: 'Pickleball', kind: 'quantity', unit: 'minutes' },
       { name: 'Lifting', kind: 'quantity', unit: 'minutes' },
     ],
   },
-  { name: 'Habits', color: '#29a36a', trackers: [] },
-  { name: 'Mood', color: '#f3a712', trackers: [{ name: 'Mood', kind: 'rating', unit: null }] },
+  { name: 'Habits', color: '#eb6834', trackers: [] },
+  { name: 'Mood', color: '#1baf7a', trackers: [{ name: 'Mood', kind: 'rating', unit: null }] },
   {
     name: 'Learning',
-    color: '#4c6ef5',
+    color: '#eda100',
     trackers: [
       { name: 'Chinese study', kind: 'quantity', unit: 'minutes' },
       { name: 'CS study', kind: 'quantity', unit: 'minutes' },
     ],
   },
-  { name: 'Reading', color: '#9c36b5', trackers: [] },
+  { name: 'Reading', color: '#e87ba4', trackers: [] },
 ];
 
 /** Inserts the starting areas and trackers (spec §3) into an empty database. No-op if any area exists. */

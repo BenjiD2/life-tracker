@@ -1,0 +1,81 @@
+import {
+  Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts';
+
+export interface Series {
+  key: string;
+  label: string;
+  color: string;
+}
+
+/**
+ * Thin Recharts wrapper: one x axis, one y axis, recessive grid, hover tooltip.
+ * `bar` stacks every series; `line` draws each as a 2px line with 8px dots.
+ * A legend appears only with two or more series (a single series is named by the chart title).
+ */
+export function TrendChart({
+  data, series, kind, height = 180, xFormat, yDomain, yTicks, unit,
+}: {
+  data: Record<string, string | number>[];
+  series: Series[];
+  kind: 'line' | 'bar';
+  height?: number;
+  xFormat?: (x: string) => string;
+  yDomain?: [number, number];
+  yTicks?: number[];
+  unit?: string;
+}) {
+  const axis = { stroke: 'var(--axis)', tick: { fill: 'var(--ink-muted)', fontSize: 11 }, tickLine: false };
+  const common = (
+    <>
+      <CartesianGrid vertical={false} stroke="var(--grid)" />
+      <XAxis dataKey="x" {...axis} tickFormatter={xFormat} minTickGap={16} />
+      <YAxis {...axis} axisLine={false} width={36} domain={yDomain} ticks={yTicks} allowDecimals={false} />
+      <Tooltip
+        cursor={kind === 'bar' ? { fill: 'var(--cell-empty)', opacity: 0.6 } : { stroke: 'var(--axis)' }}
+        content={({ active, payload, label }) =>
+          active && payload?.length ? (
+            <div className="chart-tooltip">
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>{xFormat ? xFormat(String(label)) : label}</div>
+              {payload.filter((p) => p.value !== undefined && p.value !== null).map((p) => (
+                <div key={String(p.dataKey)} className="row">
+                  <span className="swatch" style={{ background: p.color }} />
+                  <span>{series.find((s) => s.key === p.dataKey)?.label}</span>
+                  <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>{p.value}{unit ? ` ${unit}` : ''}</span>
+                </div>
+              ))}
+            </div>
+          ) : null
+        }
+      />
+      {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }}
+        // Legend text stays in ink; the swatch alone carries the series color.
+        formatter={(value) => <span style={{ color: 'var(--muted)' }}>{value}</span>} />}
+    </>
+  );
+
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      {kind === 'bar' ? (
+        <BarChart data={data} barCategoryGap="25%">
+          {common}
+          {series.map((s, i) => (
+            <Bar key={s.key} dataKey={s.key} name={s.label} stackId="a" fill={s.color}
+              // 2px surface gap between stacked segments; only the top segment gets rounded ends.
+              stroke="var(--surface)" strokeWidth={2}
+              radius={i === series.length - 1 ? [4, 4, 0, 0] : 0} isAnimationActive={false} />
+          ))}
+        </BarChart>
+      ) : (
+        <LineChart data={data}>
+          {common}
+          {series.map((s) => (
+            <Line key={s.key} dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2}
+              dot={{ r: 4, fill: s.color, stroke: 'var(--surface)', strokeWidth: 2 }} activeDot={{ r: 5 }}
+              connectNulls isAnimationActive={false} />
+          ))}
+        </LineChart>
+      )}
+    </ResponsiveContainer>
+  );
+}
