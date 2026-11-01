@@ -178,9 +178,9 @@ Example: *Read 20 books in 2026.*
 2. **Dashboard.** A time-range filter above the cards: presets (last 4 weeks,
    last 12 weeks (default), last 6 months, this year, last 12 months) and a
    custom from–to range, kept in the URL. One card per area: heatmap of active
-   days, goal progress bars, ring, and pace line, tracker totals, mood trend
-   line, pages read. Totals are per week for ranges up to ~26 weeks, per month
-   beyond. Heatmaps, totals, mood, and pages follow the range; goals always
+   days, goal progress bars, ring, and pace line, quantity charts (below),
+   mood trend line, pages read. Totals are per week for ranges up to ~26
+   weeks, per month beyond. Heatmaps, totals, mood, and pages follow the range; goals always
    show current progress.
 
    Quantity charts never mix units: each unit gets its own bar chart, stacked
@@ -197,6 +197,8 @@ Example: *Read 20 books in 2026.*
    per unit. Converted trackers are marked as estimates: lighter fill and
    "(est.)" in the legend. A tracker keeps one colour across a section's
    charts. Archived trackers still chart while they have data in the range.
+   Chart titles name the unit and bucket ("Minutes per week"). A subject
+   section with nothing in the range says so instead of showing empty charts.
 3. **Books.** Books being read now (with progress bars and a page-update
    input), a finished shelf, a dropped list, adding books (optionally with the
    page already reached), editing a book's details, and changing status.

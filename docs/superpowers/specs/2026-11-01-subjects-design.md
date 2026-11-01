@@ -133,7 +133,8 @@ Top to bottom:
    **Estimated total time** chart under the same rule as a subject section
    (below), so minutes per unit has a visible effect before anything is
    tagged. An area with no subjects, one unit, and no converted trackers looks
-   exactly as it does now. *(Builder-check call.)*
+   as it does now, apart from the chart title, which now names the unit
+   ("Minutes per week" instead of "Weekly totals (minutes)"). *(Builder-check call.)*
 4. **One section per subject** (alphabetical), each with:
    - one bar chart per unit used by its trackers (for example "Lessons per
      week" and "Practice minutes per week"), stacked by tracker within a unit,

@@ -39,7 +39,7 @@ export function TrendChart({
     <>
       <CartesianGrid vertical={false} stroke="var(--grid)" />
       <XAxis dataKey="x" {...axis} tickFormatter={xFormat} minTickGap={16} />
-      <YAxis {...axis} axisLine={false} width={36} domain={yDomain} ticks={yTicks} allowDecimals={decimals} />
+      <YAxis {...axis} axisLine={false} width={decimals ? 48 : 36} domain={yDomain} ticks={yTicks} allowDecimals={decimals} />
       <Tooltip
         cursor={kind === 'bar' ? { fill: 'var(--cell-empty)', opacity: 0.6 } : { stroke: 'var(--axis)' }}
         content={({ active, payload, label }) =>

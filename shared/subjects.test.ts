@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupBySubject, isMinuteUnit, minutesFactor } from './subjects';
+import { groupBySubject, isMinuteUnit, minutesBySubject, minutesFactor } from './subjects';
 
 describe('isMinuteUnit', () => {
   it('accepts minute spellings, trimmed and case-insensitive', () => {
@@ -42,4 +42,27 @@ describe('groupBySubject', () => {
     ]);
   });
   it('no trackers → no groups', () => expect(groupBySubject([])).toEqual([]));
+});
+
+describe('minutesBySubject', () => {
+  const t = (id: number, subject: string | null, unit: string, minutesPerUnit: number | null = null) =>
+    ({ id, subject, kind: 'quantity' as const, unit, minutesPerUnit });
+  const trackers = [t(1, null, 'minutes'), t(2, 'Chinese', 'minutes'), t(3, 'chinese', 'lessons', 40), t(4, 'C++', 'modules'), t(5, 'Art', 'minutes')];
+  const rows = [
+    { trackerId: 1, periodStart: '2026-10-05', minutes: 10 },
+    { trackerId: 1, periodStart: '2026-10-12', minutes: 0 },
+    { trackerId: 2, periodStart: '2026-10-05', minutes: 30 },
+    { trackerId: 2, periodStart: '2026-10-12', minutes: 15 },
+    { trackerId: 3, periodStart: '2026-10-05', minutes: 80 },
+    { trackerId: 3, periodStart: '2026-10-12', minutes: 0 },
+    { trackerId: 5, periodStart: '2026-10-05', minutes: 0 },
+    { trackerId: 5, periodStart: '2026-10-12', minutes: 0 },
+  ];
+
+  it('sums each subject per period, subjects first and "no subject" last; subjects without time are left out', () =>
+    expect(minutesBySubject(groupBySubject(trackers), rows)).toEqual([
+      // Art logged no time in these periods; C++ has no time-counting tracker (modules, unconverted)
+      { key: 'chinese', label: 'Chinese', minutes: { '2026-10-05': 110, '2026-10-12': 15 } },
+      { key: null, label: null, minutes: { '2026-10-05': 10, '2026-10-12': 0 } },
+    ]));
 });

@@ -1,5 +1,5 @@
 import { addDays, daysBetween } from '../../../shared/dates';
-import { minutesFactor, type SubjectGroup } from '../../../shared/subjects';
+import { minutesBySubject, minutesFactor, type SubjectGroup } from '../../../shared/subjects';
 import type { DashboardData, Tracker } from '../../../shared/types';
 import { formatMonth, formatShort } from '../format';
 import { SLOTS, TrendChart, type Series } from './TrendChart';
@@ -16,7 +16,7 @@ export interface BarSpec {
 }
 
 const ESTIMATED_OPACITY = 0.55;
-const hours = (minutes: number) => Math.round(minutes / 6) / 10; // one decimal place
+const hours = (minutes: number) => Math.round(minutes / 0.6) / 100; // two decimals, so a few minutes isn't 0
 const unitKey = (t: Tracker) => t.unit?.trim().toLowerCase() ?? '';
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const hasAny = (spec: BarSpec) => spec.rows.some((r) => spec.series.some((s) => Number(r[s.key]) > 0));
@@ -56,10 +56,12 @@ export function quantityCharts(trackers: Tracker[], data: DashboardData): BarSpe
       series: group.map((t) => ({ key: `t${t.id}`, label: t.name, color: colorOf(t) })),
       rows: periods.map((x) => Object.fromEntries([['x', x], ...group.map((t) => [`t${t.id}`, totalOf(data, t.id, x)])])),
     };
-  });
+  }).filter(hasAny);
 
   const timed = trackers.filter((t) => minutesFactor(t) !== null);
-  if (timed.some((t) => t.minutesPerUnit !== null)) {
+  // Decided on raw minutes: a few minutes a bucket rounds to 0.0 h but is still time.
+  const anyTime = data.trackerMinutes.some((w) => w.minutes > 0 && timed.some((t) => t.id === w.trackerId));
+  if (anyTime && timed.some((t) => t.minutesPerUnit !== null)) {
     specs.push({
       title: `Estimated total time per ${data.bucket} (hours)`,
       unit: 'h',
@@ -76,7 +78,7 @@ export function quantityCharts(trackers: Tracker[], data: DashboardData): BarSpe
       rows: periods.map((x) => Object.fromEntries([['x', x], ...timed.map((t) => [`t${t.id}`, hours(minutesOf(data, t.id, x))])])),
     });
   }
-  return specs.filter(hasAny);
+  return specs;
 }
 
 /**
@@ -84,15 +86,15 @@ export function quantityCharts(trackers: Tracker[], data: DashboardData): BarSpe
  * stack so the total is never quietly incomplete. Null unless two or more stacks have time.
  */
 export function subjectTimeChart(groups: SubjectGroup<Tracker>[], data: DashboardData): BarSpec | null {
-  const ordered = [...groups.filter((g) => g.key !== null), ...groups.filter((g) => g.key === null)]
-    .map((g) => ({ label: g.label ?? 'No subject', timed: g.trackers.filter((t) => minutesFactor(t) !== null) }))
-    .filter((g) => g.timed.length > 0);
-  const series = ordered.map((g, i): Series => ({ key: `s${i}`, label: g.label, color: SLOTS[i % SLOTS.length] }));
-  const rows = periodsOf(data).map((x) =>
-    Object.fromEntries([['x', x], ...ordered.map((g, i) => [`s${i}`, hours(g.timed.reduce((sum, t) => sum + minutesOf(data, t.id, x), 0))])]),
-  );
-  const withTime = series.filter((s) => rows.some((r) => Number(r[s.key]) > 0));
-  return withTime.length < 2 ? null : { title: `Estimated time by subject per ${data.bucket} (hours)`, unit: 'h', decimals: true, series, rows };
+  const stacks = minutesBySubject(groups, data.trackerMinutes);
+  if (stacks.length < 2) return null;
+  return {
+    title: `Estimated time by subject per ${data.bucket} (hours)`,
+    unit: 'h',
+    decimals: true,
+    series: stacks.map((g, i) => ({ key: `s${i}`, label: g.label ?? 'No subject', color: SLOTS[i % SLOTS.length] })),
+    rows: periodsOf(data).map((x) => Object.fromEntries([['x', x], ...stacks.map((g, i) => [`s${i}`, hours(g.minutes[x] ?? 0)])])),
+  };
 }
 
 export function BarCharts({ specs, data }: { specs: BarSpec[]; data: DashboardData }) {

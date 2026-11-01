@@ -1,4 +1,4 @@
-import type { Kind } from './types';
+import type { DateStr, Kind } from './types';
 
 const MINUTE_UNITS = new Set(['minutes', 'minute', 'min', 'mins']);
 
@@ -44,4 +44,23 @@ export function groupBySubject<T extends { id: number; subject: string | null }>
   return [...groups.values()]
     .map((g) => g.group)
     .sort((a, b) => (a.key === null ? -1 : b.key === null ? 1 : a.key.localeCompare(b.key)));
+}
+
+/**
+ * Minutes per period for each group, from per-tracker rows (the dashboard's `trackerMinutes`): subjects
+ * first, the ungrouped group (key null) last. Groups with no time in any period are left out.
+ */
+export function minutesBySubject<T extends { id: number; kind: Kind; unit: string | null; minutesPerUnit: number | null }>(
+  groups: SubjectGroup<T>[],
+  rows: { trackerId: number; periodStart: DateStr; minutes: number }[],
+): { key: string | null; label: string | null; minutes: Record<DateStr, number> }[] {
+  const ordered = [...groups.filter((g) => g.key !== null), ...groups.filter((g) => g.key === null)];
+  return ordered
+    .map((g) => {
+      const ids = new Set(g.trackers.filter((t) => minutesFactor(t) !== null).map((t) => t.id));
+      const minutes: Record<DateStr, number> = {};
+      for (const r of rows) if (ids.has(r.trackerId)) minutes[r.periodStart] = (minutes[r.periodStart] ?? 0) + r.minutes;
+      return { key: g.key, label: g.label, minutes };
+    })
+    .filter((g) => Object.values(g.minutes).some((m) => m > 0));
 }
