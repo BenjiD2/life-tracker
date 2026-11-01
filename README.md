@@ -16,7 +16,7 @@ Run commands from this folder: the server opens `tracker.db` relative to where i
 - **Today:** log every tracker for a day (◀ ▶ for past days) and update pages for books you're reading.
 - **Dashboard:** heatmaps, goal rings and pace bars, totals, mood, and pages read, filtered by time range.
 - **Books:** reading list, finished shelf, add and edit books. If you're partway through a book when you add it, fill in *Already at page* so earlier reading isn't counted as one day's reading.
-- **Manage:** areas, trackers (check / quantity / rating), goals, and checklist items.
+- **Manage:** areas, trackers (check / quantity / rating, with an optional subject and ≈ minutes each), goals, and checklist items.
 
 ## Your data
 

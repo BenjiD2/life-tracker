@@ -55,7 +55,8 @@ copy a snapshot over `tracker.db`.
 ```
 areas        id, name, color
 trackers     id, area_id → areas, name, kind ('check'|'quantity'|'rating'),
-             unit (nullable), archived (bool, default false)
+             unit (nullable), archived (bool, default false),
+             subject (nullable), minutes_per_unit (real, nullable)
 entries      id, tracker_id → trackers, date ('YYYY-MM-DD'), value (number),
              note (nullable)
              UNIQUE (tracker_id, date)
@@ -90,6 +91,17 @@ The tracker's `kind` decides how `value` is read, and which input the UI shows:
 
 An area can hold any mix of tracker kinds.
 
+### Subjects and minutes per unit
+
+- **Subject** is an optional free-text tag that groups trackers inside an area
+  (for example *Chinese* and *C++* inside *Learning*). Adding one needs no
+  setup: type it on the tracker. Grouping ignores case and surrounding spaces;
+  the heading uses the spelling of the group's lowest-id tracker. Empty means
+  no subject. The same tag in two areas makes two separate groups.
+- **Minutes per unit** (quantity trackers only, positive) is how many minutes
+  one unit is worth, so lessons, modules, or chapters can be converted into
+  estimated time.
+
 ### Starting configuration (seed data)
 
 | Area | Trackers |
@@ -114,6 +126,12 @@ An area can hold any mix of tracker kinds.
 - **Goal progress:** calculated from `entries`, `books`, `reading_log`, and
   `goal_items`. Goals store only their rules.
 - **Streaks:** see section 4.
+- **Time in minutes** for a quantity tracker's entry (`shared/subjects.ts`):
+  `value × minutes_per_unit` when that is set (it wins over the unit, and lets
+  an `hours` tracker use 60); else `value` when the unit is a minute unit
+  (`minutes`, `minute`, `min`, `mins`, trimmed, any case); else the tracker
+  doesn't count toward time. Changing `minutes_per_unit` re-estimates all of
+  history.
 
 ## 4. Goals
 
@@ -155,7 +173,8 @@ Example: *Read 20 books in 2026.*
    its kind's input. Already-logged trackers show their value. A date picker
    (◀ ▶) allows logging past days. A reading row allows updating the page for
    any book with status `reading`. A strip at the top shows current goal
-   progress.
+   progress. Inside an area, trackers with a subject sit under a small subject
+   heading: ungrouped trackers first, then subjects alphabetically.
 2. **Dashboard.** A time-range filter above the cards: presets (last 4 weeks,
    last 12 weeks (default), last 6 months, this year, last 12 months) and a
    custom from–to range, kept in the URL. One card per area: heatmap of active
@@ -163,11 +182,29 @@ Example: *Read 20 books in 2026.*
    line, pages read. Totals are per week for ranges up to ~26 weeks, per month
    beyond. Heatmaps, totals, mood, and pages follow the range; goals always
    show current progress.
+
+   Quantity charts never mix units: each unit gets its own bar chart, stacked
+   by tracker. Inside an area card, after the heatmap and goals:
+   - **Estimated time by subject** (hours, stacked by subject, with a final
+     "No subject" stack for time-counting trackers outside any subject), shown
+     when the area has a subject and two or more stacks have time.
+   - Ungrouped trackers: one chart per unit, then the rating trend.
+   - One bordered section per subject, alphabetically, with the same charts
+     for its trackers.
+
+   Ungrouped trackers and each subject section also get **Estimated total
+   time** (hours, stacked by tracker) when any of their trackers has minutes
+   per unit. Converted trackers are marked as estimates: lighter fill and
+   "(est.)" in the legend. A tracker keeps one colour across a section's
+   charts. Archived trackers still chart while they have data in the range.
 3. **Books.** Books being read now (with progress bars and a page-update
    input), a finished shelf, a dropped list, adding books (optionally with the
    page already reached), editing a book's details, and changing status.
 4. **Manage.** Create, edit, and archive areas, trackers, goals, and checklist
-   items.
+   items. Each tracker has a subject field (suggesting the subjects already
+   used in its area) and, for quantity trackers, a "≈ [ ] min each" field. That
+   field shows when the unit isn't a minute unit, or when a value is already
+   set, so it can still be cleared after a unit is renamed.
 
 ## 6. Code organization
 
@@ -175,6 +212,7 @@ Example: *Read 20 books in 2026.*
 life-tracker/
 ├── shared/                  used by server and browser
 │   ├── dates.ts             date strings, week/month periods
+│   ├── subjects.ts          subject grouping, minutes-per-unit rule
 │   ├── types.ts             row and API types
 │   └── schemas.ts           Zod input schemas
 ├── server/
@@ -207,6 +245,8 @@ plain values, so they can be tested without a database.
   - `quantity` value must be ≥ 0.
   - `page_reached` must be between 0 and the book's `total_pages`.
   - Goal fields must match the goal's `type` and `source`.
+  - `minutes_per_unit` is positive and finite, or null; a non-null value on a
+    check or rating tracker is refused (400). An empty subject is stored as null.
   - A book's `start_page` is between 0 and `total_pages`, and `total_pages`
     can't drop below `start_page` or any logged `page_reached`.
 - **Logging the last page:** setting `page_reached = total_pages` asks the user

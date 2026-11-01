@@ -1,9 +1,9 @@
 # Subjects and Estimated Time — Design
 
 **Date:** 2026-11-01
-**Status:** Draft (builder-checked), awaiting approval. On approval the behaviour here is folded
-into `2026-10-31-life-tracker-design.md` (the authority) in the same change as
-the code.
+**Status:** Implemented 2026-11-01 and folded into
+`2026-10-31-life-tracker-design.md`, which is now the authority. Kept as the
+record of why.
 
 ## 1. Why
 
