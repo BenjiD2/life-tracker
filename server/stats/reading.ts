@@ -22,3 +22,10 @@ export function pagesReadByDate(
   }
   return out;
 }
+
+/** Dates on which any pages were read (a downward correction alone is not reading). */
+export function readingDates(logs: { bookId: number; date: DateStr; pageReached: number }[]): Set<DateStr> {
+  const out = new Set<DateStr>();
+  for (const [date, pages] of pagesReadByDate(logs)) if (pages > 0) out.add(date);
+  return out;
+}

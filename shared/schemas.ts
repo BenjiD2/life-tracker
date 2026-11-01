@@ -43,7 +43,12 @@ const optionalText = z.string().trim().min(1).nullish();
 
 export const bookInput = z.object({ title: name, author: name, totalPages: pages, topic: optionalText });
 export const bookPatch = z
-  .object({ title: name, author: name, totalPages: pages, topic: optionalText, status: z.enum(['reading', 'done', 'dropped']) })
+  .object({
+    title: name, author: name, totalPages: pages, topic: optionalText,
+    status: z.enum(['reading', 'done', 'dropped']),
+    /** When the book was finished, if not today (e.g. the last page was logged on a past date). */
+    finished: dateStr,
+  })
   .partial()
   .strict();
 export const readingLogInput = z.object({

@@ -3,7 +3,8 @@ import { addDays, periodBounds } from '../../shared/dates';
 import type { DashboardData, DateStr } from '../../shared/types';
 import type { Db } from '../db/client';
 import { areas, entries, readingLog, trackers } from '../db/schema';
-import { pagesReadByDate } from '../stats/reading';
+import { pagesReadByDate, readingDates } from '../stats/reading';
+import { isBooksArea } from './books-area';
 import { activeDates } from '../stats/streaks';
 import { goalsWithProgress } from './goals';
 
@@ -21,9 +22,12 @@ export function dashboardRoutes(db: Db, today: () => DateStr) {
     // Every date maps to the Monday of its week; only the 12 tracked weeks are kept.
     const weekOf = (d: DateStr) => periodBounds(d, 'week').start;
 
+    const logs = db.select().from(readingLog).all();
     const areaRows = db.select().from(areas).all().map((area) => {
       const ids = new Set(allTrackers.filter((t) => t.areaId === area.id).map((t) => t.id));
-      const dates = [...activeDates(allEntries, ids)].filter((d) => d >= yearAgo && d <= now).sort();
+      const active = activeDates(allEntries, ids);
+      if (isBooksArea(area)) for (const d of readingDates(logs)) active.add(d);
+      const dates = [...active].filter((d) => d >= yearAgo && d <= now).sort();
       return { area, activeDates: dates };
     });
 
@@ -45,7 +49,7 @@ export function dashboardRoutes(db: Db, today: () => DateStr) {
 
     // Deltas need each book's full history, so diff everything, then bucket.
     const pages = new Map<DateStr, number>();
-    for (const [date, n] of pagesReadByDate(db.select().from(readingLog).all())) {
+    for (const [date, n] of pagesReadByDate(logs)) {
       if (date < weekStarts[0] || date > now) continue;
       pages.set(weekOf(date), (pages.get(weekOf(date)) ?? 0) + n);
     }

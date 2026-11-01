@@ -62,6 +62,6 @@ export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : St
 export async function logPage(book: Book, date: DateStr, pageReached: number): Promise<void> {
   const { reachedEnd } = await putReadingLog({ bookId: book.id, date, pageReached });
   if (reachedEnd && book.status !== 'done' && confirm(`Mark '${book.title}' as finished?`)) {
-    await updateBook(book.id, { status: 'done' });
+    await updateBook(book.id, { status: 'done', finished: date });
   }
 }

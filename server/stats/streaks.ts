@@ -1,13 +1,16 @@
 import { addDays, periodBounds } from '../../shared/dates';
 import type { DateStr, Period } from '../../shared/types';
 
-/** Dates on which any of `trackerIds` has an entry. A day logged by several trackers appears once. */
+/**
+ * Dates on which any of `trackerIds` has an entry. A day logged by several trackers appears once.
+ * An entry with value 0 ("0 minutes of tennis") is not activity.
+ */
 export function activeDates(
-  entries: { trackerId: number; date: DateStr }[],
+  entries: { trackerId: number; date: DateStr; value?: number }[],
   trackerIds: ReadonlySet<number>,
 ): Set<DateStr> {
   const out = new Set<DateStr>();
-  for (const e of entries) if (trackerIds.has(e.trackerId)) out.add(e.date);
+  for (const e of entries) if (trackerIds.has(e.trackerId) && e.value !== 0) out.add(e.date);
   return out;
 }
 

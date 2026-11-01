@@ -34,8 +34,9 @@ export function bookRoutes(db: Db, today: () => DateStr) {
       if (!book) return fail(c, 404, 'Book not found');
       const patch = c.req.valid('json');
       if (Object.keys(patch).length === 0) return c.json(book);
-      const finished =
-        patch.status === undefined ? book.finished : patch.status === 'done' ? (book.finished ?? today()) : null;
+      const done = (patch.status ?? book.status) === 'done';
+      if (patch.finished !== undefined && !done) return fail(c, 400, 'finished can only be set on a book marked done');
+      const finished = done ? (patch.finished ?? book.finished ?? today()) : null;
       return c.json(db.update(books).set({ ...patch, finished }).where(eq(books.id, book.id)).returning().get());
     })
     .put('/reading-log', validate('json', readingLogInput), (c) => {

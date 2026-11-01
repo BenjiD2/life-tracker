@@ -11,12 +11,16 @@ describe('GET /api/dashboard', () => {
     const book = (await req('POST', '/api/books', { title: 'b', author: 'a', totalPages: 300 })).body;
     await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-05', pageReached: 40 });
     await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-13', pageReached: 100 });
+    await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-14', pageReached: 90 }); // correction: 0 pages
 
     const d = (await req('GET', '/api/dashboard')).body;
     expect(d.today).toBe('2026-10-15');
     expect(d.areas.find((a: { area: { name: string } }) => a.area.name === 'Fitness').activeDates)
       .toEqual(['2026-10-01', '2026-10-02']);
     expect(d.areas.find((a: { area: { name: string } }) => a.area.name === 'Habits').activeDates).toEqual([]);
+    // Reading has no trackers: its active days are days with pages read (a downward correction isn't reading)
+    expect(d.areas.find((a: { area: { name: string } }) => a.area.name === 'Reading').activeDates)
+      .toEqual(['2026-10-05', '2026-10-13']);
 
     expect(d.pagesPerWeek).toHaveLength(12);
     expect(d.pagesPerWeek.at(-1)).toEqual({ weekStart: '2026-10-12', pages: 60 });

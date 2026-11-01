@@ -10,6 +10,14 @@ describe('activeDates', () => {
   });
 });
 
+describe('activeDates: zero values', () => {
+  it('does not count an entry with value 0 as activity', () => {
+    expect(activeDates([
+      { trackerId: 1, date: '2026-10-01', value: 0 }, { trackerId: 1, date: '2026-10-02', value: 30 },
+    ], new Set([1]))).toEqual(new Set(['2026-10-02']));
+  });
+});
+
 describe('countInRange', () => {
   it('is inclusive at both ends', () => {
     expect(countInRange(new Set(['2026-09-30', '2026-10-01', '2026-10-31', '2026-11-01']),

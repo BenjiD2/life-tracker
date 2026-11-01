@@ -29,6 +29,17 @@ describe('books', () => {
       .toMatchObject({ status: 'reading', finished: null });
   });
 
+  it('PATCH status done with an explicit finished date uses that date', async () => {
+    const { req, book } = await withBook();
+    expect((await req('PATCH', `/api/books/${book.id}`, { status: 'done', finished: '2026-10-10' })).body)
+      .toMatchObject({ status: 'done', finished: '2026-10-10' });
+  });
+
+  it('PATCH finished on a book that will not be done → 400', async () => {
+    const { req, book } = await withBook();
+    expect((await req('PATCH', `/api/books/${book.id}`, { finished: '2026-10-10' })).status).toBe(400);
+  });
+
   it('PATCH on a missing book → 404', async () => {
     const { req } = setup();
     expect((await req('PATCH', '/api/books/999', { title: 'x' })).status).toBe(404);

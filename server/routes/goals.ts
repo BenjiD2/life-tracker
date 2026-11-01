@@ -3,7 +3,9 @@ import { Hono } from 'hono';
 import { goalInput, goalItemInput, goalItemPatch, goalPatch } from '../../shared/schemas';
 import type { DateStr, Goal, GoalWithProgress } from '../../shared/types';
 import type { Db } from '../db/client';
-import { areas, books, entries, goalItems, goals, trackers } from '../db/schema';
+import { areas, books, entries, goalItems, goals, readingLog, trackers } from '../db/schema';
+import { readingDates } from '../stats/reading';
+import { isBooksArea } from './books-area';
 import { goalProgress } from '../stats/goals';
 import { activeDates } from '../stats/streaks';
 import { fail, paramId, validate } from './http';
@@ -19,6 +21,8 @@ export function goalsWithProgress(db: Db, today: DateStr, onlyId?: number): Goal
   const allEntries = db.select().from(entries).all();
   const allBooks = db.select().from(books).all();
   const allItems = db.select().from(goalItems).all();
+  const booksAreaIds = new Set(db.select().from(areas).all().filter(isBooksArea).map((a) => a.id));
+  const readDays = booksAreaIds.size > 0 ? readingDates(db.select().from(readingLog).all()) : new Set<DateStr>();
 
   return goalRows.map((goal) => {
     const items = allItems.filter((i) => i.goalId === goal.id);
@@ -27,10 +31,16 @@ export function goalsWithProgress(db: Db, today: DateStr, onlyId?: number): Goal
         ? [goal.scopeTrackerId]
         : allTrackers.filter((t) => t.areaId === goal.areaId).map((t) => t.id),
     );
+    let goalDates = new Set<DateStr>();
+    if (goal.type === 'consistency') {
+      goalDates = activeDates(allEntries, scope);
+      // An area-wide goal on the books area also counts reading days.
+      if (goal.scopeTrackerId === null && booksAreaIds.has(goal.areaId)) for (const d of readDays) goalDates.add(d);
+    }
     const progress = goalProgress(
       goal,
       {
-        activeDates: goal.type === 'consistency' ? activeDates(allEntries, scope) : new Set(),
+        activeDates: goalDates,
         books: allBooks,
         entries: goal.sourceTrackerId === null ? [] : allEntries.filter((e) => e.trackerId === goal.sourceTrackerId),
         items,

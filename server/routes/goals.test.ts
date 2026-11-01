@@ -31,6 +31,16 @@ describe('consistency goals', () => {
     expect(g.body.progress.current).toBe(1);
   });
 
+  it('a Reading-area goal counts days with pages read', async () => {
+    const { req } = setup('2026-10-15');
+    const reading = (await req('GET', '/api/areas')).body.find((a: { name: string }) => a.name === 'Reading').id;
+    const book = (await req('POST', '/api/books', { title: 'b', author: 'a', totalPages: 300 })).body;
+    await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-05', pageReached: 40 });
+    await req('PUT', '/api/reading-log', { bookId: book.id, date: '2026-10-13', pageReached: 100 });
+    const g = await req('POST', '/api/goals', { type: 'consistency', title: 'read', areaId: reading, period: 'month', targetDays: 5 });
+    expect(g.body.progress.current).toBe(2);
+  });
+
   it('targetDays 0 → 400', async () => {
     const { req, areaId } = await fitness();
     const r = await req('POST', '/api/goals', { type: 'consistency', title: 'x', areaId, period: 'week', targetDays: 0 });
