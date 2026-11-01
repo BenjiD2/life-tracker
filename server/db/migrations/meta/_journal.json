@@ -15,6 +15,13 @@
       "when": 1793505329604,
       "tag": "0001_redundant_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793550396530,
+      "tag": "0002_safe_shadow_king",
+      "breakpoints": true
     }
   ]
 }

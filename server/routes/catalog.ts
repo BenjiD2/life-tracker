@@ -5,6 +5,8 @@ import type { Db } from '../db/client';
 import { areas, goals, trackers } from '../db/schema';
 import { fail, paramId, validate } from './http';
 
+const NOT_QUANTITY = 'Minutes per unit only applies to quantity trackers';
+
 export function catalogRoutes(db: Db) {
   const findArea = (id: number | null) => (id === null ? undefined : db.select().from(areas).where(eq(areas.id, id)).get());
 
@@ -40,7 +42,12 @@ export function catalogRoutes(db: Db) {
     .post('/trackers', validate('json', trackerInput), (c) => {
       const input = c.req.valid('json');
       if (!findArea(input.areaId)) return fail(c, 404, 'Area not found');
-      const row = db.insert(trackers).values({ ...input, unit: input.unit ?? null }).returning().get();
+      if (input.minutesPerUnit != null && input.kind !== 'quantity') return fail(c, 400, NOT_QUANTITY);
+      const row = db
+        .insert(trackers)
+        .values({ ...input, unit: input.unit ?? null, subject: input.subject ?? null, minutesPerUnit: input.minutesPerUnit ?? null })
+        .returning()
+        .get();
       return c.json(row, 201);
     })
     .patch('/trackers/:id', validate('json', trackerPatch), (c) => {
@@ -48,6 +55,7 @@ export function catalogRoutes(db: Db) {
       const tracker = id === null ? undefined : db.select().from(trackers).where(eq(trackers.id, id)).get();
       if (!tracker) return fail(c, 404, 'Tracker not found');
       const patch = c.req.valid('json');
+      if (patch.minutesPerUnit != null && tracker.kind !== 'quantity') return fail(c, 400, NOT_QUANTITY);
       if (patch.areaId !== undefined && patch.areaId !== tracker.areaId) {
         if (!findArea(patch.areaId)) return fail(c, 404, 'Area not found');
         // A goal scoped to this tracker belongs to its current area; moving it would split the two.

@@ -13,6 +13,8 @@ export const trackers = sqliteTable('trackers', {
   kind: text('kind', { enum: ['check', 'quantity', 'rating'] }).notNull(),
   unit: text('unit'),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  subject: text('subject'),
+  minutesPerUnit: real('minutes_per_unit'),
 });
 
 export const entries = sqliteTable(

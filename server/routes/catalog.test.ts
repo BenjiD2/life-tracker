@@ -90,3 +90,39 @@ describe('trackers', () => {
     expect(all.find((t: { id: number }) => t.id === id)).toMatchObject({ archived: true });
   });
 });
+
+describe('tracker subject and minutes per unit', () => {
+  const learning = async (req: ReturnType<typeof setup>['req']) =>
+    (await req('GET', '/api/areas')).body.find((a: { name: string }) => a.name === 'Learning').id;
+
+  it('POST stores a trimmed subject and minutes per unit; both default to null', async () => {
+    const { req } = setup();
+    const areaId = await learning(req);
+    const r = await req('POST', '/api/trackers', { areaId, name: 'Chinese lessons', kind: 'quantity', unit: 'lessons', subject: ' Chinese ', minutesPerUnit: 40 });
+    expect(r).toMatchObject({ status: 201, body: { subject: 'Chinese', minutesPerUnit: 40 } });
+    const plain = await req('POST', '/api/trackers', { areaId, name: 'Flashcards', kind: 'quantity', unit: 'minutes' });
+    expect(plain.body).toMatchObject({ subject: null, minutesPerUnit: null });
+  });
+
+  it('PATCH clears with an empty subject or null minutes per unit', async () => {
+    const { req } = setup();
+    const t = (await req('POST', '/api/trackers', { areaId: await learning(req), name: 'L', kind: 'quantity', unit: 'lessons', subject: 'Chinese', minutesPerUnit: 40 })).body;
+    expect((await req('PATCH', `/api/trackers/${t.id}`, { subject: '  ' })).body.subject).toBeNull();
+    expect((await req('PATCH', `/api/trackers/${t.id}`, { minutesPerUnit: null })).body.minutesPerUnit).toBeNull();
+  });
+
+  it('minutes per unit on a check or rating tracker → 400; null is accepted', async () => {
+    const { req, trackerId } = setup();
+    const check = await req('POST', '/api/trackers', { areaId: await learning(req), name: 'Did it', kind: 'check', minutesPerUnit: 30 });
+    expect(check.status).toBe(400);
+    expect(typeof check.body.error).toBe('string');
+    expect((await req('PATCH', `/api/trackers/${trackerId('Mood')}`, { minutesPerUnit: 10 })).status).toBe(400);
+    expect((await req('PATCH', `/api/trackers/${trackerId('Mood')}`, { minutesPerUnit: null })).status).toBe(200);
+  });
+
+  it('zero or negative minutes per unit → 400', async () => {
+    const { req, trackerId } = setup();
+    expect((await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { minutesPerUnit: 0 })).status).toBe(400);
+    expect((await req('PATCH', `/api/trackers/${trackerId('Tennis')}`, { minutesPerUnit: -5 })).status).toBe(400);
+  });
+});

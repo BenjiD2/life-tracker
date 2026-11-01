@@ -18,6 +18,10 @@ export interface Tracker {
   kind: Kind;
   unit: string | null;
   archived: boolean;
+  /** Free-text tag grouping trackers within an area; see shared/subjects.ts. */
+  subject: string | null;
+  /** Quantity trackers only: minutes one unit is worth, for estimated time. */
+  minutesPerUnit: number | null;
 }
 
 export interface Entry {
