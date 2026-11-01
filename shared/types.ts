@@ -84,3 +84,10 @@ export interface GoalProgress {
   /** Where the value should be today on a straight line to the deadline; null without a deadline. */
   expected: number | null;
 }
+
+export type BookWithPage = Book & { currentPage: number };
+export interface ReadingLogResult {
+  row: ReadingLogRow;
+  /** The log reached the book's last page; the UI offers to mark it done. */
+  reachedEnd: boolean;
+}

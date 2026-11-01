@@ -37,3 +37,21 @@ export type AreaPatch = z.infer<typeof areaPatch>;
 export type TrackerInput = z.infer<typeof trackerInput>;
 export type TrackerPatch = z.infer<typeof trackerPatch>;
 export type EntryInput = z.infer<typeof entryInput>;
+
+const pages = z.number().int().positive('must be at least 1');
+const optionalText = z.string().trim().min(1).nullish();
+
+export const bookInput = z.object({ title: name, author: name, totalPages: pages, topic: optionalText });
+export const bookPatch = z
+  .object({ title: name, author: name, totalPages: pages, topic: optionalText, status: z.enum(['reading', 'done', 'dropped']) })
+  .partial()
+  .strict();
+export const readingLogInput = z.object({
+  bookId: id,
+  date: dateStr,
+  pageReached: z.number().int().min(0, 'must be 0 or more'),
+});
+
+export type BookInput = z.infer<typeof bookInput>;
+export type BookPatch = z.infer<typeof bookPatch>;
+export type ReadingLogInput = z.infer<typeof readingLogInput>;
