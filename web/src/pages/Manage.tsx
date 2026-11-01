@@ -113,6 +113,8 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
         {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select>
       <span className="muted" title="Kind can't change after creation">{t.kind}</span>
+      <InlineText label={`Subject of ${t.name}`} width="7rem" placeholder="subject" list={subjectsList(t.areaId)}
+        value={t.subject ?? ''} onSave={(v) => attempt(() => api.updateTracker(t.id, { subject: v }))} />
       {t.kind === 'quantity' && (
         <InlineText label={`Unit of ${t.name}`} width="7rem" placeholder="unit" value={t.unit ?? ''}
           onSave={(v) => attempt(() => api.updateTracker(t.id, { unit: v.trim() || null }))} />
@@ -125,8 +127,6 @@ function TrackersSection({ areas, trackers, refresh }: { areas: Area[]; trackers
           min each
         </label>
       )}
-      <InlineText label={`Subject of ${t.name}`} width="7rem" placeholder="subject" list={subjectsList(t.areaId)}
-        value={t.subject ?? ''} onSave={(v) => attempt(() => api.updateTracker(t.id, { subject: v }))} />
       <button type="button" style={{ marginLeft: 'auto' }}
         onClick={() => attempt(() => api.updateTracker(t.id, { archived: !t.archived }))}>
         {t.archived ? 'Unarchive' : 'Archive'}

@@ -42,15 +42,18 @@ export function visibleTrackers(trackers: Tracker[], data: DashboardData): Track
  */
 export function quantityCharts(trackers: Tracker[], data: DashboardData): BarSpec[] {
   const periods = periodsOf(data);
+  const quantity = trackers.filter((t) => t.kind === 'quantity');
+  // A tracker keeps one colour across the unit and estimated charts: its slot follows its place in the section.
+  const colorOf = (t: Tracker) => SLOTS[quantity.indexOf(t) % SLOTS.length];
   const byUnit = new Map<string, Tracker[]>();
-  for (const t of trackers.filter((t) => t.kind === 'quantity')) byUnit.set(unitKey(t), [...(byUnit.get(unitKey(t)) ?? []), t]);
+  for (const t of quantity) byUnit.set(unitKey(t), [...(byUnit.get(unitKey(t)) ?? []), t]);
 
   const specs: BarSpec[] = [...byUnit.values()].map((group) => {
     const unit = group[0].unit?.trim() || undefined;
     return {
       title: unit ? `${capitalise(unit)} per ${data.bucket}` : `Totals per ${data.bucket}`,
       unit,
-      series: group.map((t, i) => ({ key: `t${t.id}`, label: t.name, color: SLOTS[i % SLOTS.length] })),
+      series: group.map((t) => ({ key: `t${t.id}`, label: t.name, color: colorOf(t) })),
       rows: periods.map((x) => Object.fromEntries([['x', x], ...group.map((t) => [`t${t.id}`, totalOf(data, t.id, x)])])),
     };
   });
@@ -61,12 +64,12 @@ export function quantityCharts(trackers: Tracker[], data: DashboardData): BarSpe
       title: `Estimated total time per ${data.bucket} (hours)`,
       unit: 'h',
       decimals: true,
-      series: timed.map((t, i) => {
+      series: timed.map((t) => {
         const estimated = t.minutesPerUnit !== null;
         return {
           key: `t${t.id}`,
           label: estimated ? `${t.name} (est.)` : t.name,
-          color: SLOTS[i % SLOTS.length],
+          color: colorOf(t),
           opacity: estimated ? ESTIMATED_OPACITY : undefined,
         };
       }),
