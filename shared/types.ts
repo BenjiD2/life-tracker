@@ -91,3 +91,18 @@ export interface ReadingLogResult {
   /** The log reached the book's last page; the UI offers to mark it done. */
   reachedEnd: boolean;
 }
+
+export type GoalWithProgress = Goal & { items: GoalItem[]; progress: GoalProgress };
+
+export interface DashboardData {
+  today: DateStr;
+  /** Active dates over the last 365 days, ascending. */
+  areas: { area: Area; activeDates: DateStr[] }[];
+  goals: GoalWithProgress[];
+  /** Quantity trackers, last 12 weeks including the current one, zero-filled. */
+  weeklyTotals: { trackerId: number; weekStart: DateStr; total: number }[];
+  /** Rating entries over the last 90 days, ascending by date. */
+  mood: { trackerId: number; date: DateStr; value: number }[];
+  /** Last 12 weeks including the current one, zero-filled. */
+  pagesPerWeek: { weekStart: DateStr; pages: number }[];
+}
